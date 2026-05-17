@@ -1,6 +1,6 @@
-timetracker-linux/
-timetracker-mac/
-timetracker-win/
+tuitime-linux/
+tuitime-mac/
+tuitime-win/
 config.json
 recent_comments.json
 logs/

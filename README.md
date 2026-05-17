@@ -4,7 +4,7 @@ A sleek, terminal-based time tracking suite with real-time visualization, goal t
 
 ## Features
 
-### Time Tracker
+### tuitime (Tracker)
 - **Smart Setup:** Unified screen for Start Time, End Time, and Comments.
 - **Live & Manual Modes:** Log time in real-time or retrospectively.
 - **High-Res ASCII Clock:** Choose between Plain Text, Small (5-row), or Large (7-row) blocky clocks.
@@ -14,7 +14,7 @@ A sleek, terminal-based time tracking suite with real-time visualization, goal t
     - Shows **top 10** most recent entries immediately when the field is empty.
     - Instant filtering as you type.
 
-### Reporter
+### timesleuth (Reporter)
 - **Scalable Logs:** Automatically organizes entries into `logs/YYYY/MM-MonthName.md`.
 - **Goal Visualization:** Heatmaps/Progress bars based on your custom weekly hour target.
 - **Flexible Tracking:** Enable/Disable work goals at any time.
@@ -63,8 +63,8 @@ WEEKLY TOTALS (Target: 40.0h)
 Binaries for Linux, macOS, and Windows are available in the **Releases** section of this repository.
 
 ### Running
-1. **Track Time:** Run `time-tracker` to start logging.
-2. **View Reports:** Run `reporter` to see your progress.
+1. **Track Time:** Run `tuitime` to start logging.
+2. **View Reports:** Run `timesleuth` to see your progress.
 3. **Configure:** Press `,` in either application to open settings.
 
 ## Log Structure
