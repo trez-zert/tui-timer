@@ -34,6 +34,7 @@ const (
 	stateSetup sessionState = iota
 	stateTracking
 	stateSettings
+	stateChangeTask
 )
 
 type model struct {
@@ -43,6 +44,7 @@ type model struct {
 	startTimeInput textinput.Model
 	endTimeInput   textinput.Model
 	commentInput   textinput.Model
+	changeTaskInput textinput.Model
 
 	startTime      time.Time
 	endTime        time.Time
@@ -53,6 +55,8 @@ type model struct {
 	suggestions     []string
 	filtered        []string
 	suggestionIndex int
+
+	confirmNegative bool
 
 	config Config
 
@@ -147,6 +151,9 @@ func initialModel() model {
 	c := textinput.New()
 	c.Placeholder = "Comment (optional, defaults to 'work')"
 
+	ct := textinput.New()
+	ct.Placeholder = "New task description"
+
 	suggestions := getRecentComments()
 	var filtered []string
 	if len(suggestions) > 0 {
@@ -163,6 +170,7 @@ func initialModel() model {
 		startTimeInput:  s,
 		endTimeInput:    e,
 		commentInput:    c,
+		changeTaskInput: ct,
 		suggestions:     suggestions,
 		filtered:        filtered,
 		suggestionIndex: -1,
@@ -190,6 +198,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				saveConfig(m.config)
 				return m, tick()
 			}
+			if m.state == stateChangeTask {
+				m.state = stateTracking
+				return m, tick()
+			}
+		case "t": // Change Task
+			if m.state == stateTracking {
+				m.state = stateChangeTask
+				if m.isPaused {
+					m.endTime = m.pauseStart
+				} else {
+					m.endTime = time.Now()
+				}
+				m.changeTaskInput.SetValue("")
+				m.changeTaskInput.Focus()
+				m.updateFiltered("")
+				return m, nil
+			}
 		case ",": // Settings
 			if m.state == stateTracking {
 				m.state = stateSettings
@@ -211,11 +236,30 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		case "enter":
+			if m.state == stateChangeTask {
+				newComment := m.changeTaskInput.Value()
+				if newComment == "" {
+					newComment = "work"
+				}
+
+				// Log the completed task
+				m.logToFile()
+
+				// Start new task
+				m.startTime = m.endTime
+				m.pausedDuration = 0
+				m.isPaused = false
+				m.commentInput.SetValue(newComment)
+				m.state = stateTracking
+				return m, tick()
+			}
 			if m.state == stateSetup {
 				if m.focusIndex < 2 {
 					m.focusIndex++
 					return m.updateFocus(), nil
 				}
+				// Submit form
+				m.err = nil
 				valStart := m.startTimeInput.Value()
 				if valStart == "" {
 					m.startTime = time.Now()
@@ -236,11 +280,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						return m, nil
 					}
 					m.endTime = t
+
+					if m.endTime.Before(m.startTime) && !m.confirmNegative {
+						m.confirmNegative = true
+						return m, nil
+					}
+
 					m.logToFile()
 					return m, tea.Quit
 				}
 
+				if m.startTime.After(time.Now()) && !m.confirmNegative {
+					m.confirmNegative = true
+					return m, nil
+				}
+
 				m.state = stateTracking
+				m.confirmNegative = false
 				return m, tick()
 			}
 		case "tab", "down":
@@ -260,6 +316,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focusIndex = (m.focusIndex + 1) % 3
 				return m.updateFocus(), nil
 			}
+			if m.state == stateChangeTask && len(m.filtered) > 0 {
+				if msg.String() == "tab" && m.suggestionIndex == -1 {
+					m.changeTaskInput.SetValue(m.filtered[0])
+					m.suggestionIndex = -1
+					m.updateFiltered("")
+					return m, nil
+				}
+				m.suggestionIndex = (m.suggestionIndex + 1) % len(m.filtered)
+				m.changeTaskInput.SetValue(m.filtered[m.suggestionIndex])
+				return m, nil
+			}
 		case "up":
 			if m.state == stateSetup {
 				if m.focusIndex == 2 && len(m.filtered) > 0 {
@@ -275,6 +342,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.focusIndex = 2
 				}
 				return m.updateFocus(), nil
+			}
+			if m.state == stateChangeTask && len(m.filtered) > 0 {
+				m.suggestionIndex--
+				if m.suggestionIndex < 0 {
+					m.suggestionIndex = len(m.filtered) - 1
+				}
+				m.changeTaskInput.SetValue(m.filtered[m.suggestionIndex])
+				return m, nil
 			}
 		case "p":
 			if m.state == stateTracking {
@@ -299,13 +374,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tickMsg:
-		if (m.state == stateTracking || m.state == stateSettings) && !m.isPaused {
+		if (m.state == stateTracking || m.state == stateSettings || m.state == stateChangeTask) && !m.isPaused {
 			return m, tick()
 		}
 
 	case error:
 		m.err = msg
 		return m, nil
+	}
+
+	if m.state == stateChangeTask {
+		prevVal := m.changeTaskInput.Value()
+		m.changeTaskInput, cmd = m.changeTaskInput.Update(msg)
+		newVal := m.changeTaskInput.Value()
+		if newVal != prevVal {
+			m.updateFiltered(newVal)
+		}
 	}
 
 	if m.state == stateSetup {
@@ -421,6 +505,23 @@ func (m model) View() string {
 	var s string
 
 	switch m.state {
+	case stateChangeTask:
+		s = lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Bold(true).Render("Change Task") + "\n\n"
+		s += fmt.Sprintf("Current Task: %s\n", m.commentInput.Value())
+		s += fmt.Sprintf("New Task:     %s\n", m.changeTaskInput.View())
+
+		if len(m.filtered) > 0 {
+			s += "\nSuggestions:\n"
+			for i, f := range m.filtered {
+				style := lipgloss.NewStyle()
+				if i == m.suggestionIndex {
+					style = style.Foreground(lipgloss.Color("205")).Bold(true)
+				}
+				s += style.Render(fmt.Sprintf("  • %s", f)) + "\n"
+			}
+		}
+		s += "\n(enter to confirm, esc to cancel)"
+
 	case stateSetup:
 		modeText := "LIVE TIMER"
 		if m.endTimeInput.Value() != "" {
@@ -443,6 +544,11 @@ func (m model) View() string {
 		s += "\n(tab/arrows to navigate, enter to submit, q to quit)"
 		if m.err != nil {
 			s += lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render(fmt.Sprintf("\n\nError: %v", m.err))
+		}
+
+		if m.confirmNegative {
+			warn := "Warning: Start time is after end time (or in the future).\nPress Enter again to confirm negative/future entry."
+			s += lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Bold(true).Render("\n\n" + warn)
 		}
 
 	case stateSettings:
@@ -480,7 +586,7 @@ func (m model) View() string {
 		clock := clockStyle.Render(renderClock(timeStr, m.config.ClockMode))
 
 		s = fmt.Sprintf(
-			"Activity: %s\nStatus: %s\n\n%s\n\n(p)ause, (s)top, (,) settings",
+			"Activity: %s\nStatus: %s\n\n%s\n\n(p)ause, (s)top, (t)ask, (,) settings",
 			displayComment,
 			status,
 			clock,
@@ -543,7 +649,7 @@ func (m model) logToFile() {
 
 func updateRecentComments(newComment string) {
 	comments := getRecentComments()
-	
+
 	// Remove if already exists to move to top
 	var updated []string
 	updated = append(updated, newComment)
@@ -552,12 +658,12 @@ func updateRecentComments(newComment string) {
 			updated = append(updated, c)
 		}
 	}
-	
+
 	// Limit to 50
 	if len(updated) > 50 {
 		updated = updated[:50]
 	}
-	
+
 	saveRecentComments(updated)
 }
 
