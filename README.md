@@ -5,9 +5,9 @@ A sleek, terminal-based time tracking suite with real-time visualization, goal t
 ## Features
 
 ### tuitime (Tracker)
-- **Smart Setup:** Unified screen for Start Time, End Time, and Comments.
+- **Easy Setup:** Unified screen for Start Time, Manual Time Entry, and Comments.
 - **Live & Manual Modes:** Log time in real-time or retrospectively.
-- **High-Res ASCII Clock:** Choose between Plain Text, Small (5-row), or Large (7-row) blocky clocks.
+- **High-Res ASCII-styæe Clock:** Choose between Plain Text, Small (5-row), or Large (7-row) blocky clocks.
 - **Customizable Themes:** Cycle through 7 colors for your timer display.
 - **Intelligent Autocomplete:** 
     - Remembers your **50 most recent** unique comments.
@@ -15,7 +15,7 @@ A sleek, terminal-based time tracking suite with real-time visualization, goal t
     - Instant filtering as you type.
 
 ### timesleuth (Reporter)
-- **Scalable Logs:** Automatically organizes entries into `logs/YYYY/MM-MonthName.md`.
+- **Scalable Logs:** Automatically organizes entries into easily human-readable `logs/YYYY/MM-MonthName.md`.
 - **Goal Visualization:** Heatmaps/Progress bars based on your custom weekly hour target.
 - **Flexible Tracking:** Enable/Disable work goals at any time.
 - **Comprehensive Overviews:** Daily (Oldest -> Newest), Weekly, Monthly, and Yearly totals.
