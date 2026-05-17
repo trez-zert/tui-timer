@@ -4,7 +4,7 @@ A sleek, terminal-based time tracking suite with real-time visualization, goal t
 
 ## Features
 
-### 🚀 Time Tracker
+### Time Tracker
 - **Smart Setup:** Unified screen for Start Time, End Time, and Comments.
 - **Live & Manual Modes:** Log time in real-time or retrospectively.
 - **High-Res ASCII Clock:** Choose between Plain Text, Small (5-row), or Large (7-row) blocky clocks.
@@ -14,7 +14,7 @@ A sleek, terminal-based time tracking suite with real-time visualization, goal t
     - Shows **top 10** most recent entries immediately when the field is empty.
     - Instant filtering as you type.
 
-### 📊 Reporter
+### Reporter
 - **Scalable Logs:** Automatically organizes entries into `logs/YYYY/MM-MonthName.md`.
 - **Goal Visualization:** Heatmaps/Progress bars based on your custom weekly hour target.
 - **Flexible Tracking:** Enable/Disable work goals at any time.
@@ -33,25 +33,13 @@ End Time:   _________________________________
 Comment:    Cod|
 
 Suggestions:
-  • Coding
+  • Coding          <-- Selected
   • Code Review
+  • Documentation
 ```
 
 ### 2. Large ASCII Clock [Running]
-```text
-Activity: Coding
-Status: RUNNING
-
- █████    █████   ███████   █████    █████   ███████   █████    █████ 
-█     █  █     █         █ █     █  █     █         █ █     █  █     █
-█     █  █     █        █  █     █  █     █        █  █     █  █     █
-█     █  █     █       █   █     █  █     █       █   █     █  █     █
-█     █  █     █      █    █     █  █     █      █    █     █  █     █
-█     █  █     █     █     █     █  █     █     █     █     █  █     █
- █████    █████   █         █████    █████   █         █████    █████ 
-
-(p)ause, (s)top, (,) settings
-```
+![ASCII Clock](ascii-clock.png)
 
 ### 3. Reporter with Progress Heatmaps
 ```text
@@ -72,10 +60,7 @@ WEEKLY TOTALS (Target: 40.0h)
 ## Installation & Usage
 
 ### Binaries
-Pre-compiled binaries are available for:
-- **Linux:** `timetracker-linux/`
-- **macOS (Apple Silicon):** `timetracker-mac/`
-- **Windows:** `timetracker-win/`
+Binaries for Linux, macOS, and Windows are available in the **Releases** section of this repository.
 
 ### Running
 1. **Track Time:** Run `time-tracker` to start logging.

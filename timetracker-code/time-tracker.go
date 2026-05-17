@@ -76,7 +76,21 @@ func getRecentComments() []string {
 
 	f, err := os.ReadFile(cachePath)
 	if err != nil {
-		return nil
+		// Generate defaults if file is missing
+		defaults := []string{
+			"Coding",
+			"Meeting",
+			"Research",
+			"Documentation",
+			"Testing",
+			"Debugging",
+			"Planning",
+			"Support",
+			"Review",
+			"Design",
+		}
+		saveRecentComments(defaults)
+		return defaults
 	}
 
 	var comments []string
