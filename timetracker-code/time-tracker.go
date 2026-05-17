@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"os"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -23,14 +26,18 @@ type model struct {
 	state          sessionState
 	startTimeInput textinput.Model
 	commentInput   textinput.Model
-	
+
 	startTime      time.Time
 	endTime        time.Time
 	pausedDuration time.Duration
 	pauseStart     time.Time
 	isPaused       bool
-	
-	err            error
+
+	suggestions     []string
+	filtered        []string
+	suggestionIndex int
+
+	err error
 }
 
 type tickMsg time.Time
@@ -41,6 +48,37 @@ func tick() tea.Cmd {
 	})
 }
 
+func getUniqueComments() []string {
+	f, err := os.Open("timelog.md")
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	comments := make(map[string]bool)
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "|") || strings.Contains(line, "---") || strings.Contains(line, "| Date |") {
+			continue
+		}
+		parts := strings.Split(line, "|")
+		if len(parts) >= 6 {
+			comment := strings.TrimSpace(parts[5])
+			if comment != "" && comment != "work" {
+				comments[comment] = true
+			}
+		}
+	}
+
+	var res []string
+	for c := range comments {
+		res = append(res, c)
+	}
+	sort.Strings(res)
+	return res
+}
+
 func initialModel() model {
 	s := textinput.New()
 	s.Placeholder = "Start Time (HH:MM or leave blank for now)"
@@ -49,10 +87,14 @@ func initialModel() model {
 	c := textinput.New()
 	c.Placeholder = "Comment (optional, defaults to 'work')"
 
+	suggestions := getUniqueComments()
+
 	return model{
-		state:          stateStartTime,
-		startTimeInput: s,
-		commentInput:   c,
+		state:           stateStartTime,
+		startTimeInput:  s,
+		commentInput:    c,
+		suggestions:     suggestions,
+		suggestionIndex: -1,
 	}
 }
 
@@ -87,6 +129,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case stateComment:
 				m.state = stateTracking
 				return m, tick()
+			}
+		case "down", "tab":
+			if m.state == stateComment && len(m.filtered) > 0 {
+				if msg.String() == "tab" && m.suggestionIndex == -1 {
+					// Auto-complete with the first match if nothing is selected
+					m.commentInput.SetValue(m.filtered[0])
+					m.suggestionIndex = -1
+					m.filtered = nil
+				} else {
+					m.suggestionIndex = (m.suggestionIndex + 1) % len(m.filtered)
+					m.commentInput.SetValue(m.filtered[m.suggestionIndex])
+				}
+				return m, nil
+			}
+		case "up":
+			if m.state == stateComment && len(m.filtered) > 0 {
+				m.suggestionIndex--
+				if m.suggestionIndex < 0 {
+					m.suggestionIndex = len(m.filtered) - 1
+				}
+				m.commentInput.SetValue(m.filtered[m.suggestionIndex])
+				return m, nil
 			}
 		case "p":
 			if m.state == stateTracking {
@@ -124,7 +188,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case stateStartTime:
 		m.startTimeInput, cmd = m.startTimeInput.Update(msg)
 	case stateComment:
+		prevVal := m.commentInput.Value()
 		m.commentInput, cmd = m.commentInput.Update(msg)
+		newVal := m.commentInput.Value()
+
+		if newVal != prevVal {
+			m.suggestionIndex = -1
+			if newVal == "" {
+				m.filtered = nil
+			} else {
+				m.filtered = nil
+				for _, s := range m.suggestions {
+					if strings.HasPrefix(strings.ToLower(s), strings.ToLower(newVal)) {
+						m.filtered = append(m.filtered, s)
+					}
+				}
+			}
+		}
 	}
 
 	return m, cmd
@@ -140,7 +220,18 @@ func (m model) View() string {
 			s += lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render(fmt.Sprintf("\n\nError: %v", m.err))
 		}
 	case stateComment:
-		s = fmt.Sprintf("Enter Comment (optional):\n\n%s\n\n(ctrl+c to quit)", m.commentInput.View())
+		s = fmt.Sprintf("Enter Comment (optional):\n\n%s", m.commentInput.View())
+		if len(m.filtered) > 0 {
+			s += "\n\nSuggestions (tab/arrows to select):\n"
+			for i, f := range m.filtered {
+				style := lipgloss.NewStyle()
+				if i == m.suggestionIndex {
+					style = style.Foreground(lipgloss.Color("205")).Bold(true)
+				}
+				s += style.Render(fmt.Sprintf("  • %s", f)) + "\n"
+			}
+		}
+		s += "\n(ctrl+c to quit)"
 	case stateTracking:
 		elapsed := time.Since(m.startTime) - m.pausedDuration
 		if m.isPaused {
