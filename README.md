@@ -42,18 +42,7 @@ Suggestions:
 ![ASCII Clock](ascii-clock.png)
 
 ### 3. Reporter with Progress Heatmaps
-```text
-Time Tracking Report (Goal: 40.0h/week)
-
-DAILY TOTALS (Target: 8.0h)
-2026-05-17: 8h30m [████████████████████]
-  - Coding: 6h0m
-  - Meeting: 2h30m
-
-WEEKLY TOTALS (Target: 40.0h)
-2026-W20: 34h15m [█████████████████░░░]
-  - Development: 34h15m
-```
+![Reporter](timesleuth.png)
 
 ---
 
