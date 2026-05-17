@@ -24,7 +24,7 @@ A sleek, terminal-based time tracking suite with real-time visualization, goal t
 
 ## Visual Preview
 
-### 1. Timer Setup [Live Mode]
+### 1. Timer Setup [Live Mode or Manual Entry]
 ```text
 Session Setup [LIVE TIMER]
 
