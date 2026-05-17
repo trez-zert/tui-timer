@@ -7,7 +7,7 @@ A sleek, terminal-based time tracking suite with real-time visualization, goal t
 ### tuitime (Tracker)
 - **Easy Setup:** Unified screen for Start Time, Manual Time Entry, and Comments.
 - **Live & Manual Modes:** Log time in real-time or retrospectively.
-- **High-Res ASCII-styæe Clock:** Choose between Plain Text, Small (5-row), or Large (7-row) blocky clocks.
+- **ASCII-style Clock:** Choose between Plain Text, Small (5-row), or Large (7-row) blocky clocks.
 - **Customizable Themes:** Cycle through 7 colors for your timer display.
 - **Intelligent Autocomplete:** 
     - Remembers your **50 most recent** unique comments.
