@@ -60,7 +60,7 @@ WEEKLY TOTALS (Target: 40.0h)
 ## Installation & Usage
 
 ### Binaries
-Binaries for Linux, macOS, and Windows are available in the **Releases** section of this repository.
+Binaries for Linux, macOS, and Windows will soon be available in the **Releases** section of this repository.
 
 ### Running
 1. **Track Time:** Run `tuitime` to start logging.
