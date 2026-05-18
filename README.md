@@ -8,7 +8,7 @@ A professional, terminal-based time tracking suite with real-time visualization,
 - **Smart Setup:** Focused screen for Start Time, End Time, and Comments with real-time validation.
 - **Timer Modes:** Log time in real-time or retrospectively with manual entry.
 - **Advanced Day View:** Navigate, edit, or delete any entry in your history with full Undo support.
-- **High-Res ASCII Clock:** Choose between Plain Text, Small (5-row), or Large (7-row) blocky clocks.
+- **ASCII Clock:** Choose between Plain Text, Small (5-row), or Large (7-row) blocky clocks.
 - **Customizable Themes:** Cycle through 7 colors for your timer display.
 - **Goal Visualization:** Heatmaps and progress bars based on your custom weekly hour target.
 - **Intelligent Autocomplete:** Remembers your 50 most recent unique comments with instant filtering.
@@ -39,7 +39,7 @@ Suggestions:
 ### 2. Large ASCII Clock
 ![ASCII Clock](ascii-clock.png)
 
-### 3. Timesleuth Reports
+### 3. Daily/Weekly/Monthly Reports
 ![Reporter](timesleuth.png)
 
 ---
