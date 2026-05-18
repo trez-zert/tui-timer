@@ -4,3 +4,5 @@ tuitime-win/
 config.json
 recent_comments.json
 logs/
+*.tar.gz
+*.zip
