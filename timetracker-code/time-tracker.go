@@ -126,7 +126,7 @@ type model struct {
 // --- Globals ---
 
 var colors = []string{"1", "2", "3", "4", "5", "6", "7"} // Red, Green, Yellow, Blue, Magenta, Cyan, White
-var menuItems = []string{"Timer", "Reports", "Day View", "Settings"}
+var menuItems = []string{"Reports", "Day View", "Settings", "Quit"}
 
 // --- Messages ---
 
@@ -517,10 +517,13 @@ func (m model) updateSetup(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "q", "esc":
-			if m.focusIndex == -1 {
-				return m, tea.Quit
+		case "esc":
+			if m.focusIndex != -1 {
+				m.focusIndex = -1
+				m.updateFocus()
+				return m, nil
 			}
+			return m, tea.Quit
 		case "left":
 			if m.focusIndex == -1 {
 				m.menuIndex--
@@ -536,10 +539,12 @@ func (m model) updateSetup(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "up":
 			if m.focusIndex == 2 && len(m.filtered) > 0 {
-				m.suggestionIndex--
-				if m.suggestionIndex < 0 {
-					m.suggestionIndex = len(m.filtered) - 1
+				if m.suggestionIndex <= 0 {
+					m.focusIndex--
+					m.updateFocus()
+					return m, nil
 				}
+				m.suggestionIndex--
 				m.commentInput.SetValue(m.filtered[m.suggestionIndex])
 				return m, nil
 			}
@@ -551,13 +556,12 @@ func (m model) updateSetup(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "down", "tab":
 			if m.focusIndex == 2 && len(m.filtered) > 0 {
-				if msg.String() == "tab" && m.suggestionIndex == -1 {
-					m.commentInput.SetValue(m.filtered[0])
+				if msg.String() == "tab" {
+					m.commentInput.SetValue(m.filtered[m.suggestionIndex])
 					m.updateFiltered("")
 					return m, nil
 				}
 				m.suggestionIndex = (m.suggestionIndex + 1) % len(m.filtered)
-				m.commentInput.SetValue(m.filtered[m.suggestionIndex])
 				return m, nil
 			}
 			m.focusIndex++
@@ -569,22 +573,20 @@ func (m model) updateSetup(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			if m.focusIndex == -1 {
 				switch m.menuIndex {
-				case 0:
-					m.focusIndex = 0
-					m.updateFocus()
-					return m, nil
-				case 1:
+				case 0: // Reports
 					m.view = viewReports
 					return m, m.loadReports()
-				case 2:
+				case 1: // Day View
 					m.view = viewDay
 					m.dayCursor = -1
 					m.selectedDate = time.Now()
 					return m, m.loadDayEntries()
-				case 3:
+				case 2: // Settings
 					m.view = viewSettings
 					m.state = stateSettings
 					return m, nil
+				case 3: // Quit
+					return m, tea.Quit
 				}
 			}
 			if m.focusIndex < 2 {
@@ -993,13 +995,12 @@ func (m model) updateDayAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.loadDayEntries()
 		case "tab", "down":
 			if m.focusIndex == 2 && len(m.filtered) > 0 {
-				if msg.String() == "tab" && m.suggestionIndex == -1 {
-					m.commentInput.SetValue(m.filtered[0])
+				if msg.String() == "tab" {
+					m.commentInput.SetValue(m.filtered[m.suggestionIndex])
 					m.updateFiltered("")
 					return m, nil
 				}
 				m.suggestionIndex = (m.suggestionIndex + 1) % len(m.filtered)
-				m.commentInput.SetValue(m.filtered[m.suggestionIndex])
 				return m, nil
 			}
 			m.focusIndex++
@@ -1010,11 +1011,12 @@ func (m model) updateDayAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "up":
 			if m.focusIndex == 2 && len(m.filtered) > 0 {
-				m.suggestionIndex--
-				if m.suggestionIndex < 0 {
-					m.suggestionIndex = len(m.filtered) - 1
+				if m.suggestionIndex <= 0 {
+					m.focusIndex--
+					m.updateFocus()
+					return m, nil
 				}
-				m.commentInput.SetValue(m.filtered[m.suggestionIndex])
+				m.suggestionIndex--
 				return m, nil
 			}
 			m.focusIndex--
