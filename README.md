@@ -45,7 +45,6 @@ A professional, terminal-based time tracking suite with real-time visualization,
 ## Installation & Usage
 
 ### Binaries
-### Binaries
 Pre-compiled binaries for the following platforms are available in the **Releases** section:
 
 | Platform | Architecture | Recommended Use |
