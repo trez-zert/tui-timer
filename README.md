@@ -7,7 +7,7 @@ A professional, terminal-based time tracking suite with real-time visualization,
 - **Unified Application:** Access timer setup, historical day management, and reports from a single hub.
 - **Smart Setup:** Focused screen for Start Time, End Time, and Comments with real-time format validation.
 - **Timer Modes:** Log time in real-time or retrospectively with manual entry.
-- **Advanced Day View:** Navigate through time (<< Day View: YYYY-MM-DD >>), edit entries in-place, delete them, or add new retrospective logs.
+- **Advanced Day View:** Navigate through time, edit entries in-place, delete them, or add new retrospective logs.
 - **Full Undo:** Made a mistake? Press **u** in the Day View to instantly revert all changes from your current session.
 - **High-Res ASCII Clock:** Choose between Plain Text, Small (5-row), or Large (7-row) blocky clocks.
 - **Customizable Themes:** Cycle through 7 colors for your timer display.
@@ -22,29 +22,23 @@ A professional, terminal-based time tracking suite with real-time visualization,
 
 ## Visual Preview
 
-### 1. Main Setup & Menu
-```text
-tuitime
+### 1. Timer Setup & Navigation
+![Timer Setup](timer-setup.png)
 
-[Reports]   Day View   Settings   Quit
+### 2. Live Tracking (Multiple Clock Modes)
+| Plain Text | Small ASCII | Large ASCII |
+| :---: | :---: | :---: |
+| ![Plain](plain-text-timer.png) | ![Small](small-ascii-timer.png) | ![Large](large-ascii-timer.png) |
 
-Session Setup [TIMER]
+### 3. Advanced Day View (Historical Editing)
+![Day View](day-view.png)
 
-Start Time: 09:00
-End Time:   _________________________________
-Comment:    Cod|
+### 4. Timesleuth Reports & Heatmaps
+![Reports](reports.png)
+![Totals](daily-and-weekly-totals.png)
 
-Suggestions:
- • Coding          <-- Selected
- • Code Review
- • Documentation
-```
-
-### 2. Large ASCII Clock
-![ASCII Clock](ascii-clock.png)
-
-### 3. Timesleuth Reports
-![Reporter](timesleuth.png)
+### 5. Goal & Vacation Settings
+![Goals](goal-settings.png)
 
 ---
 
