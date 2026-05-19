@@ -91,16 +91,29 @@ If you have Go installed, you can build tuitime yourself:
    ```bash
    git clone https://github.com/Trez-zerT/TUI-timer.git
    cd TUI-timer/timetracker-code
+   go mod tidy
    ```
 2. Build for your current platform:
    ```bash
    go build -o tuitime time-tracker.go
    ```
-3. To cross-compile for all platforms:
+3. Cross-compile for all platforms:
    ```bash
-   GOOS=linux GOARCH=amd64 go build -o tuitime-linux time-tracker.go
-   GOOS=darwin GOARCH=arm64 go build -o tuitime-macos time-tracker.go
-   GOOS=windows GOARCH=amd64 go build -o tuitime-windows.exe time-tracker.go
+   # Linux
+   GOOS=linux GOARCH=amd64 go build -o tuitime-linux/tuitime time-tracker.go
+   GOOS=linux GOARCH=arm64 go build -o tuitime-rpi64/tuitime time-tracker.go
+   GOOS=linux GOARCH=arm GOARM=7 go build -o tuitime-rpi32/tuitime time-tracker.go
+   
+   # macOS
+   GOOS=darwin GOARCH=arm64 go build -o tuitime-macos-arm/tuitime time-tracker.go
+   GOOS=darwin GOARCH=amd64 go build -o tuitime-macos-intel/tuitime time-tracker.go
+   
+   # Windows
+   GOOS=windows GOARCH=amd64 go build -o tuitime-win-amd64/tuitime.exe time-tracker.go
+   GOOS=windows GOARCH=arm64 go build -o tuitime-win-arm64/tuitime.exe time-tracker.go
+   
+   # FreeBSD
+   GOOS=freebsd GOARCH=amd64 go build -o tuitime-freebsd/tuitime time-tracker.go
    ```
 
 ---
