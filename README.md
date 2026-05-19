@@ -5,13 +5,17 @@ A professional, terminal-based time tracking suite with real-time visualization,
 ## Features
 
 - **Unified Application:** Access timer setup, historical day management, and reports from a single hub.
-- **Smart Setup:** Focused screen for Start Time, End Time, and Comments with real-time validation.
+- **Smart Setup:** Focused screen for Start Time, End Time, and Comments with real-time format validation.
 - **Timer Modes:** Log time in real-time or retrospectively with manual entry.
-- **Advanced Day View:** Navigate, edit, or delete any entry in your history with full Undo support.
-- **ASCII Clock:** Choose between Plain Text, Small (5-row), or Large (7-row) blocky clocks.
+- **Advanced Day View:** Navigate through time (<< Day View: YYYY-MM-DD >>), edit entries in-place, delete them, or add new retrospective logs.
+- **Full Undo:** Made a mistake? Press **u** in the Day View to instantly revert all changes from your current session.
+- **High-Res ASCII Clock:** Choose between Plain Text, Small (5-row), or Large (7-row) blocky clocks.
 - **Customizable Themes:** Cycle through 7 colors for your timer display.
-- **Goal Visualization:** Heatmaps and progress bars based on your custom weekly hour target.
-- **Intelligent Autocomplete:** Remembers your 50 most recent unique comments with instant filtering.
+- **Goal Visualization:** Heatmaps and progress bars (e.g., "34h of 40h") based on your custom targets.
+- **Flexible Goals:** Set a **Weekly** or **Yearly** target and the app will synchronize the other automatically.
+- **Vacation Support:** Specify vacation days per year and the app will automatically adjust your work targets to compensate.
+- **Report Customization:** Toggle the visibility of Daily, Weekly, Monthly, and Yearly sections.
+- **Intelligent Autocomplete:** Remembers your 50 most recent unique comments with instant, non-destructive navigation.
 - **Scalable Logs:** Automatically organizes entries into `logs/YYYY/MM-MonthName.md`.
 
 ---
@@ -22,7 +26,7 @@ A professional, terminal-based time tracking suite with real-time visualization,
 ```text
 tuitime
 
-[Timer]   Reports   Day View   Settings
+[Reports]   Day View   Settings   Quit
 
 Session Setup [TIMER]
 
@@ -39,7 +43,7 @@ Suggestions:
 ### 2. Large ASCII Clock
 ![ASCII Clock](ascii-clock.png)
 
-### 3. Daily/Weekly/Monthly Reports
+### 3. Timesleuth Reports
 ![Reporter](timesleuth.png)
 
 ---
@@ -62,11 +66,15 @@ Pre-compiled binaries for Linux, macOS, and Windows are available in the **Relea
     - **s** - Stop and log.
     - **,** - Change clock settings.
 - **Day View:** 
-    - **Arrows** - Navigate entries and days.
+    - **Arrows** - Navigate entries and days (navigate to header to change day).
     - **Enter** - Edit field in-place.
     - **a** - Add manual entry for the current day.
     - **del** - Delete entry.
     - **u** - Undo current session changes.
+- **Reports:**
+    - **Arrows** - Scroll through long reports.
+    - **PgUp/PgDown** - Fast scroll.
+    - **,** - Change target and visibility settings.
 
 ---
 
