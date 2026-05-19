@@ -33,7 +33,7 @@ A professional, terminal-based time tracking suite with real-time visualization,
 ### 3. Advanced Day View (Historical Editing)
 ![Day View](day-view.png)
 
-### 4. Timesleuth Reports & Heatmaps
+### 4. Reports & Heatmaps
 ![Reports](reports.png)
 ![Totals](daily-and-weekly-totals.png)
 
