@@ -1,6 +1,6 @@
 # tuitime
 
-A professional, terminal-based time tracking suite with real-time visualization, goal tracking, and scalable log management.
+A terminal-based time tracking suite with real-time visualization, goal tracking, and scalable log management.
 
 ## Features
 
