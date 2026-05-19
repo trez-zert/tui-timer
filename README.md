@@ -45,7 +45,19 @@ A professional, terminal-based time tracking suite with real-time visualization,
 ## Installation & Usage
 
 ### Binaries
-Pre-compiled binaries for Linux, macOS, and Windows are available in the **Releases** section of this repository.
+### Binaries
+Pre-compiled binaries for the following platforms are available in the **Releases** section:
+
+| Platform | Architecture | Recommended Use |
+| :--- | :--- | :--- |
+| **Linux** | `amd64` | Standard PCs, Servers |
+| **Linux** | `arm64` | Raspberry Pi 4/5 (64-bit OS) |
+| **Linux** | `armv7` | Raspberry Pi 3/4 (32-bit OS) |
+| **macOS** | `arm64` | Apple Silicon (M1/M2/M3) |
+| **macOS** | `amd64` | Intel-based Macs |
+| **Windows** | `amd64` | Standard PCs |
+| **Windows** | `arm64` | Windows on ARM devices |
+| **FreeBSD** | `amd64` | Servers |
 
 ### Running
 1. **Launch Hub:** Run `tuitime`.
