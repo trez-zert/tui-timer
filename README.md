@@ -53,7 +53,7 @@ See [CHANGELOG.md](./CHANGELOG.md) for a full history of changes.
 | **Linux** | `amd64` | Standard PCs, Servers |
 | **Linux** | `arm64` | Raspberry Pi 4/5 (64-bit OS) |
 | **Linux** | `armv7` | Raspberry Pi 3/4 (32-bit OS) |
-| **macOS** | `arm64` | Apple Silicon (M-series chips) |
+| **macOS** | `arm64` | Apple Silicon (A/M-series chips) |
 | **macOS** | `amd64` | Intel-based Macs |
 | **Windows** | `amd64` | Standard PCs |
 | **Windows** | `arm64` | Windows on ARM devices |
