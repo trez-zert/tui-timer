@@ -35,7 +35,6 @@ A terminal-based time tracking suite with real-time visualization, goal tracking
 
 ### 4. Reports & Heatmaps
 ![Reports](reports.png)
-![Totals](daily-and-weekly-totals.png)
 
 ### 5. Goal & Vacation Settings
 ![Goals](goal-settings.png)
