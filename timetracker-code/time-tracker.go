@@ -1436,13 +1436,13 @@ func (m model) viewReports() string {
 			}
 			sort.Strings(comments)
 
-			bar := ""
 			if !m.config.NoGoal {
-				bar = " " + renderProgressBar(total, target, 20)
+				bar := renderProgressBar(total, target, 20)
 				targetHours := float64(target) / float64(time.Hour)
-				s.WriteString(fmt.Sprintf("%s: %s of %.1fh%s\n", k, total.Round(time.Minute), targetHours, bar))
+				// Use fmt.Sprintf with width padding for alignment
+				s.WriteString(fmt.Sprintf("%-12s: %s of %4.1fh %s\n", k, total.Round(time.Minute), targetHours, bar))
 			} else {
-				s.WriteString(fmt.Sprintf("%s: %s\n", k, total.Round(time.Minute)))
+				s.WriteString(fmt.Sprintf("%-12s: %s\n", k, total.Round(time.Minute)))
 			}
 			for _, comment := range comments {
 				dur := data[k][comment]
