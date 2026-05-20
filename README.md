@@ -45,7 +45,9 @@ A terminal-based time tracking suite with real-time visualization, goal tracking
 ## Installation & Usage
 
 ### Binaries
-Pre-compiled binaries for the following platforms are available in the **Releases** section:
+Pre-compiled binaries for the following platforms are available in the [Releases](https://github.com/Trez-zerT/TUI-timer/releases) section or within the [binaries/](./binaries) directory of this repository.
+
+See [CHANGELOG.md](./CHANGELOG.md) for a full history of changes.
 
 | Platform | Architecture | Recommended Use |
 | :--- | :--- | :--- |
