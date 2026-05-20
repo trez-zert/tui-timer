@@ -1203,8 +1203,38 @@ func (m model) updateDayAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 			et = time.Date(m.selectedDate.Year(), m.selectedDate.Month(), m.selectedDate.Day(), et.Hour(), et.Minute(), 0, 0, et.Location())
 			if et.Before(st) && !m.confirmNegative {
 				m.confirmNegative = true
+				m.err = fmt.Errorf("End time before start time. Press Enter again to confirm negative, or 'c' to cross midnight.")
 				return m, nil
 			}
+
+			// Handle cross-midnight entry
+			if m.confirmNegative && msg.String() == "c" {
+				// Part 1: current day
+				todayStart := st
+				todayEnd := time.Date(st.Year(), st.Month(), st.Day(), 23, 59, 59, 0, st.Location())
+				
+				// Part 2: next day
+				tomorrow := m.selectedDate.AddDate(0, 0, 1)
+				tomorrowStart := time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 0, 0, 0, 0, st.Location())
+				tomorrowEnd := et.AddDate(0, 0, 1) // et is already today's date
+
+				m.createDayBackup()
+				// Add Part 1
+				e1 := entry{date: m.selectedDate, start: todayStart, end: todayEnd, duration: todayEnd.Sub(todayStart), comment: m.commentInput.Value()}
+				// Add Part 2
+				e2 := entry{date: tomorrow, start: tomorrowStart, end: tomorrowEnd, duration: tomorrowEnd.Sub(tomorrowStart), comment: m.commentInput.Value()}
+				if e1.comment == "" { e1.comment = "work" }
+				if e2.comment == "" { e2.comment = "work" }
+
+				m.dayEntries = append(m.dayEntries, e1, e2)
+				m.saveDayChanges()
+				
+				m.confirmNegative = false
+				m.err = nil
+				m.view = viewDay
+				return m, m.loadDayEntries()
+			}
+
 			m.createDayBackup()
 			newEntry := entry{
 				date:     m.selectedDate,
