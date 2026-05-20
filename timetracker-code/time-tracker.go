@@ -1317,7 +1317,7 @@ func (m model) viewOnboarding() string {
 func (m model) viewSetup() string {
 	var s strings.Builder
 	titleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Bold(true)
-	s.WriteString(titleStyle.Render("tuitime") + "\n\n")
+	s.WriteString(titleStyle.Render("tuitime") + " " + lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render("v1.0.4") + "\n\n")
 
 	// Menu
 	for i, item := range menuItems {
