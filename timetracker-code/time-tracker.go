@@ -910,6 +910,7 @@ func (m model) updateSettings(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if (m.view == viewSettings || m.view == viewReports) && m.toastMsg == "fromReports" {
 				m.view = viewReports
+				m.repCursor = 0
 				m.toastMsg = ""
 				return m, nil
 			}
@@ -1475,11 +1476,11 @@ func (m model) viewReports() string {
 		maxViewLines = 25 // Fallback for very small or uninitialized terminals
 	}
 
+	if m.repCursor > len(lines)-maxViewLines {
+		m.repCursor = len(lines) - maxViewLines
+	}
 	if m.repCursor < 0 {
 		m.repCursor = 0
-	}
-	if m.repCursor > len(lines)-maxViewLines && len(lines) > maxViewLines {
-		m.repCursor = len(lines) - maxViewLines
 	}
 
 	end := m.repCursor + maxViewLines
