@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.5] - 2026-05-21
+
+### Fixed
+- Fixed progress bar alignment issues in the Report View by enforcing fixed-width column layouts for key names and time values.
+- Yearly totals in the Report View are now properly aligned even with large values.
+
+### Changed
+- Bumped version to v1.0.5.
+
 ## [1.0.4] - 2026-05-20
 
 ### Fixed
@@ -11,7 +20,8 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Improved scroll cursor management: the view now robustly clamps the cursor to the available content.
 - Navigation improvement: The report scroll position is now reset to the top when returning from the Settings menu to ensure a consistent view.
-- Repository structure: Reorganized release binaries and archives into a dedicated `binaries/` directory with platform-specific subfolders for better project cleanliness.
+- Repository structure: Reorganized release binaries and archives into a dedicated `binaries/` directory with platform-specific subfolders.
+- In-App Versioning: Display v1.0.4 in the Setup view.
 
 ## [1.0.3] - 2026-05-19
 
