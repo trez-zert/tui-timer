@@ -1441,8 +1441,8 @@ func (m model) viewReports() string {
 				targetHours := float64(target) / float64(time.Hour)
 				// Use lipgloss to format into fixed-width columns for better alignment
 				keyStyle := lipgloss.NewStyle().Width(14)
-				timeStyle := lipgloss.NewStyle().Width(8).Align(lipgloss.Right)
-				targetStyle := lipgloss.NewStyle().Width(6).Align(lipgloss.Right)
+				timeStyle := lipgloss.NewStyle().Width(12).Align(lipgloss.Right)
+				targetStyle := lipgloss.NewStyle().Width(8).Align(lipgloss.Right)
 
 				line := fmt.Sprintf("%s: %s of %s %s", 
 					keyStyle.Render(k), 
