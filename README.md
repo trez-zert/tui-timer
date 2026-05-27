@@ -33,21 +33,21 @@ A terminal-based time tracking suite with real-time visualization, goal tracking
 ## Visual Preview
 
 ### 1. Timer Setup & Navigation
-![Timer Setup](timer-setup.png)
+![Screenshot of Timer Setup and Navigation](screenshot%20of%20Timer%20Setup%20and%20Navigation.png)
 
 ### 2. Live Tracking (Multiple Clock Modes)
 | Plain Text | Small ASCII | Large ASCII |
 | :---: | :---: | :---: |
-| ![Plain](plain-text-timer.png) | ![Small](small-ascii-timer.png) | ![Large](large-ascii-timer.png) |
+| ![Screenshot of Plain Text Clock](screenshot%20of%20Plain%20Text%20Clock.png) | ![Screenshot of Small ASCII Clock](screenshot%20of%20Small%20ASCII%20Clock.png) | ![Screenshot of Large ASCII Clock](screenshot%20of%20Large%20ASCII%20Clock.png) |
 
 ### 3. Advanced Day View (Historical Editing)
-![Day View](day-view.png)
+![Screenshot of Day View Historical Editing](screenshot%20of%20Day%20View%20Historical%20Editing.png)
 
 ### 4. Reports & Heatmaps
-![Reports](reports.png)
+![Screenshot of Reports and Heatmaps](screenshot%20of%20Reports%20and%20Heatmaps.png)
 
 ### 5. Goal & Vacation Settings
-![Goals](goal-settings.png)
+![Screenshot of Goal and Vacation Settings](screenshot%20of%20Goal%20and%20Vacation%20Settings.png)
 
 ---
 
