@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1a1a2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.json">
+<title>tuitime</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="app">
+  <div id="toast"></div>
+  <div id="screens">
+    <div id="screen-timer" class="screen active">
+      <div class="header">
+        <h1>Timer</h1>
+        <span id="timer-comment" class="comment-badge"></span>
+      </div>
+      <div id="timer-display" class="timer-display">00:00:00</div>
+      <div id="timer-status" class="timer-status">Ready</div>
+      <div class="timer-controls" id="timer-controls-start">
+        <button class="btn btn-start" id="btn-start">Start</button>
+      </div>
+      <div class="comment-selector hidden" id="start-comment-selector">
+        <input type="text" id="start-comment-input" placeholder="Task description (default: work)" autocomplete="off">
+        <div id="start-comment-suggestions" class="suggestions"></div>
+        <div class="selector-actions">
+          <button class="btn btn-sm" id="btn-start-confirm">Start Timer</button>
+          <button class="btn btn-sm btn-secondary" id="btn-start-cancel">Cancel</button>
+        </div>
+      </div>
+      <div class="timer-controls hidden" id="timer-controls-running">
+        <button class="btn btn-pause" id="btn-pause">Pause</button>
+        <button class="btn btn-stop" id="btn-stop">Stop</button>
+        <button class="btn btn-task" id="btn-task">Switch Task</button>
+      </div>
+      <div class="task-selector hidden" id="task-selector">
+        <input type="text" id="task-input" placeholder="Task description (default: work)" autocomplete="off">
+        <div id="task-suggestions" class="suggestions"></div>
+        <div class="task-actions">
+          <button class="btn btn-sm" id="btn-task-confirm">Confirm</button>
+          <button class="btn btn-sm btn-secondary" id="btn-task-cancel">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="screen-day" class="screen">
+      <div class="header">
+        <button class="btn-nav" id="day-prev">&#8592;</button>
+        <h2 id="day-title">Today</h2>
+        <button class="btn-nav" id="day-next">&#8594;</button>
+      </div>
+      <div id="day-entries" class="entries"></div>
+      <div class="day-actions">
+        <button class="btn btn-add" id="btn-add-entry">+ Add Entry</button>
+      </div>
+      <div id="add-entry-form" class="add-form hidden">
+        <input type="text" id="add-start" placeholder="Start (HH:MM)" inputmode="numeric">
+        <input type="text" id="add-end" placeholder="End (HH:MM)" inputmode="numeric">
+        <input type="text" id="add-comment" placeholder="Comment" autocomplete="off">
+        <div id="add-comment-suggestions" class="suggestions"></div>
+        <div class="add-actions">
+          <button class="btn btn-sm" id="btn-add-save">Save</button>
+          <button class="btn btn-sm btn-secondary" id="btn-add-cancel">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="screen-reports" class="screen">
+      <div class="header"><h2>Reports</h2></div>
+      <div id="reports-content" class="reports-content"></div>
+    </div>
+
+    <div id="screen-settings" class="screen">
+      <div class="header"><h2>Settings</h2></div>
+      <div class="settings-list">
+        <label class="setting-row">
+          <span>Disable Goals</span>
+          <input type="checkbox" id="setting-no-goal">
+        </label>
+        <label class="setting-row">
+          <span>Weekly Target (hours)</span>
+          <input type="number" id="setting-weekly" step="0.5" min="0">
+        </label>
+        <label class="setting-row">
+          <span>Yearly Target (hours)</span>
+          <input type="number" id="setting-yearly" step="10" min="0">
+        </label>
+        <label class="setting-row">
+          <span>Vacation Days</span>
+          <input type="number" id="setting-vacation" min="0" max="365">
+        </label>
+        <div class="setting-row">
+          <span>Show Daily</span>
+          <input type="checkbox" id="setting-show-daily">
+        </div>
+        <div class="setting-row">
+          <span>Show Weekly</span>
+          <input type="checkbox" id="setting-show-weekly">
+        </div>
+        <div class="setting-row">
+          <span>Show Monthly</span>
+          <input type="checkbox" id="setting-show-monthly">
+        </div>
+        <div class="setting-row">
+          <span>Show Yearly</span>
+          <input type="checkbox" id="setting-show-yearly">
+        </div>
+        <button class="btn" id="btn-save-settings">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <nav id="bottom-nav" class="bottom-nav">
+    <button class="nav-item active" data-screen="timer">
+      <span class="nav-icon">&#x23F1;</span>
+      <span class="nav-label">Timer</span>
+    </button>
+    <button class="nav-item" data-screen="day">
+      <span class="nav-icon">&#x1F4C5;</span>
+      <span class="nav-label">Day</span>
+    </button>
+    <button class="nav-item" data-screen="reports">
+      <span class="nav-icon">&#x1F4CA;</span>
+      <span class="nav-label">Reports</span>
+    </button>
+    <button class="nav-item" data-screen="settings">
+      <span class="nav-icon">&#x2699;</span>
+      <span class="nav-label">Settings</span>
+    </button>
+  </nav>
+</div>
+<script src="/app.js"></script>
+</body>
+</html>

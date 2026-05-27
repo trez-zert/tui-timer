@@ -1,15 +1,21 @@
-# Release Notes - v1.0.5
+# Release Notes - v1.1.0
 
-This release focuses on UI/UX improvements, specifically addressing layout inconsistencies in the Report View.
+This release adds a mobile-friendly web UI on top of the existing terminal application. The TUI and web UI share the same data files, so you can switch freely between them.
 
-## Bug Fixes
+## New Features
 
-- **Progress Bar Alignment**: Fixed issues where progress bars in the Report View were vertically misaligned.
-- **Yearly Totals Layout**: Resolved an issue where long time values in "Yearly Totals" caused line wrapping, breaking the progress bar alignment. The layout now utilizes fixed-width columns to handle large values gracefully.
+- **Web UI Mode**: Run `tuitime --web` to start an HTTP server with a touch-optimized interface for phones and tablets. The startup output shows your LAN and Tailscale IPs for easy mobile access.
+- **Timer Screen**: Large Start/Pause/Stop buttons, inline task switching with comment autocomplete suggestions displayed as tappable chips.
+- **Day View**: Swipeable date navigation, tap-to-edit entries, inline comment suggestions, add/delete entry support.
+- **Reports**: Collapsible daily/weekly/monthly/yearly sections with color-coded progress bars and per-comment breakdowns.
+- **Settings**: Toggle report visibility, adjust weekly/yearly/vacation targets, disable goals.
+- **PWA Manifest**: "Add to Home Screen" support for native-app-like experience.
 
 ## Changed
 
-- **Version Bump**: Application version updated to `v1.0.5`.
+- **Single Binary**: Both TUI and Web UI are now in a single binary. Run `tuitime` for the terminal app or `tuitime --web` for the web server.
+- **Version Bump**: Application version updated to `v1.1.0`.
+- **Build Command**: Updated to `go build -o tuitime .` to include all Go source files and embedded static assets.
 
 ## Distribution
 

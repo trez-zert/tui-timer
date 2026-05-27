@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2026-05-27
+
+### Added
+- **Mobile-Friendly Web UI:** New `--web` flag launches an HTTP server with a touch-optimized SPA for phones and tablets. Open the displayed LAN/Tailscale URL in your phone's browser.
+  - Timer with large Start/Pause/Stop buttons, inline task switching, and comment autocomplete chips.
+  - Day View with swipeable date navigation, tap-to-edit/delete entries, and suggestion chips when typing comments.
+  - Reports with collapsible daily/weekly/monthly/yearly sections, progress bars, and per-comment breakdowns.
+  - Settings for toggling report sections, disabling goals, and adjusting weekly/yearly/vacation targets.
+  - PWA manifest for "Add to Home Screen" support.
+- **Shared Data Layer:** Refactored all file I/O into `pkg/timedata/` so the TUI and web server share the same data code. Both modes read/write the identical log files, config, and recent comments — switch freely between them.
+- **Server-Side Timer State:** The web server tracks timer state (running, paused, elapsed) in memory, surviving page refreshes.
+
+### Changed
+- Version bumped to v1.1.0.
+- Single binary now serves both TUI and Web modes (`tuitime` for TUI, `tuitime --web` for the web server).
+- Build command updated: `go build -o tuitime .` (includes `web.go` and embedded static files).
+
 ## [1.0.5] - 2026-05-21
 
 ### Fixed

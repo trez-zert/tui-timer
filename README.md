@@ -1,9 +1,10 @@
 # tuitime
 
-A terminal-based time tracking suite with real-time visualization, goal tracking, and scalable log management.
+A terminal-based time tracking suite with real-time visualization, goal tracking, and scalable log management — now with a mobile-friendly web UI.
 
 ## Features
 
+### Terminal (TUI)
 - **Unified Application:** Access timer setup, historical day management, and reports from a single hub.
 - **Smart Setup:** Focused screen for Start Time, End Time, and Comments with real-time format validation.
 - **Timer Modes:** Log time in real-time or retrospectively with manual entry.
@@ -17,6 +18,15 @@ A terminal-based time tracking suite with real-time visualization, goal tracking
 - **Report Customization:** Toggle the visibility of Daily, Weekly, Monthly, and Yearly sections.
 - **Intelligent Autocomplete:** Remembers your 50 most recent unique comments with instant, non-destructive navigation.
 - **Scalable Logs:** Automatically organizes entries into `logs/YYYY/MM-MonthName.md`.
+
+### Web UI (Mobile-Friendly)
+- **Touch-Optimized Timer:** Large Start/Pause/Stop buttons, inline task switching with comment suggestions.
+- **Day View:** Swipeable date navigation, tap-to-edit entries, inline comment autocomplete chips.
+- **Reports:** Collapsible daily/weekly/monthly/yearly sections with progress bars and per-comment breakdowns.
+- **Settings:** Toggle report sections, adjust weekly/yearly/vacation targets.
+- **Responsive:** Mobile-first layout with bottom tab navigation, works on phones and tablets.
+- **PWA Ready:** Add-to-Home-Screen support via manifest.
+- **Seamless Sharing:** Web UI and TUI share the same log files, config, and recent comments — switch freely between them.
 
 ---
 
@@ -59,13 +69,23 @@ See [CHANGELOG.md](./CHANGELOG.md) for a full history of changes.
 | **Windows** | `arm64` | Windows on ARM devices |
 | **FreeBSD** | `amd64` | Servers |
 
-### Running
+### Running (TUI)
 1. **Launch Hub:** Run `tuitime`.
 2. **Navigate:** Use **Arrow Keys (Up/Down)** to move between the top menu and the input fields.
 3. **Select View:** Use **Left/Right** on the top menu to select a tool and press **Enter**.
 4. **Exit:** Press **q** or **Esc** while the top menu is focused to quit.
 
-### Controls
+### Running (Web UI)
+1. Run `tuitime --web` to start the HTTP server.
+2. Open the displayed URL in your phone's browser.
+3. The web UI lists LAN and Tailscale IPs automatically for easy mobile access.
+
+```bash
+./tuitime --web              # default port 8080
+./tuitime --web --port 9090  # custom port
+```
+
+### Controls (TUI)
 - **Timer:** 
     - **p** - Pause/Resume.
     - **t** - Switch tasks (logs current and starts new).
@@ -94,27 +114,27 @@ If you have Go installed, you can build tuitime yourself:
    cd TUI-timer/timetracker-code
    go mod tidy
    ```
-2. Build for your current platform:
+2. Build for your current platform (TUI + Web UI in a single binary):
    ```bash
-   go build -o tuitime time-tracker.go
+   go build -o tuitime .
    ```
 3. Cross-compile for all platforms:
    ```bash
    # Linux
-   GOOS=linux GOARCH=amd64 go build -o tuitime-linux/tuitime time-tracker.go
-   GOOS=linux GOARCH=arm64 go build -o tuitime-rpi64/tuitime time-tracker.go
-   GOOS=linux GOARCH=arm GOARM=7 go build -o tuitime-rpi32/tuitime time-tracker.go
+   GOOS=linux GOARCH=amd64 go build -o tuitime-linux/tuitime .
+   GOOS=linux GOARCH=arm64 go build -o tuitime-rpi64/tuitime .
+   GOOS=linux GOARCH=arm GOARM=7 go build -o tuitime-rpi32/tuitime .
    
    # macOS
-   GOOS=darwin GOARCH=arm64 go build -o tuitime-macos-arm/tuitime time-tracker.go
-   GOOS=darwin GOARCH=amd64 go build -o tuitime-macos-intel/tuitime time-tracker.go
+   GOOS=darwin GOARCH=arm64 go build -o tuitime-macos-arm/tuitime .
+   GOOS=darwin GOARCH=amd64 go build -o tuitime-macos-intel/tuitime .
    
    # Windows
-   GOOS=windows GOARCH=amd64 go build -o tuitime-win-amd64/tuitime.exe time-tracker.go
-   GOOS=windows GOARCH=arm64 go build -o tuitime-win-arm64/tuitime.exe time-tracker.go
+   GOOS=windows GOARCH=amd64 go build -o tuitime-win-amd64/tuitime.exe .
+   GOOS=windows GOARCH=arm64 go build -o tuitime-win-arm64/tuitime.exe .
    
    # FreeBSD
-   GOOS=freebsd GOARCH=amd64 go build -o tuitime-freebsd/tuitime time-tracker.go
+   GOOS=freebsd GOARCH=amd64 go build -o tuitime-freebsd/tuitime .
    ```
 
 ---

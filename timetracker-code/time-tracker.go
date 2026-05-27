@@ -1,16 +1,14 @@
 package main
 
 import (
-	"bufio"
-	"encoding/json"
 	"fmt"
-	"log"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"time-tracker/pkg/timedata"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -31,29 +29,6 @@ const (
 	viewOnboarding
 )
 
-type ClockMode int
-
-const (
-	ClockPlain ClockMode = iota
-	ClockSmall
-	ClockLarge
-)
-
-type Config struct {
-	WeeklyTarget float64   `json:"weekly_target"`
-	NoGoal       bool      `json:"no_goal"`
-	ClockColor   string    `json:"clock_color"` // Lipgloss color string (e.g. "6")
-	ClockMode    ClockMode `json:"clock_mode"`
-
-	ShowDaily   bool `json:"show_daily"`
-	ShowWeekly  bool `json:"show_weekly"`
-	ShowMonthly bool `json:"show_monthly"`
-	ShowYearly  bool `json:"show_yearly"`
-	VacationDays int  `json:"vacation_days"`
-	PreferYearly bool `json:"prefer_yearly"`
-	YearlyTarget float64 `json:"yearly_target"`
-}
-
 type sessionState int
 
 const (
@@ -62,15 +37,6 @@ const (
 	stateSettings
 	stateChangeTask
 )
-
-type entry struct {
-	date     time.Time
-	start    time.Time
-	end      time.Time
-	duration time.Duration
-	comment  string
-	original string // The raw line from the markdown file
-}
 
 type reportData struct {
 	daily   map[string]map[string]time.Duration
@@ -121,7 +87,7 @@ type model struct {
 
 	// Day View
 	selectedDate time.Time
-	dayEntries   []entry
+	dayEntries   []timedata.TimeEntry
 	dayCursor    int
 	colCursor    int // 0: Start, 1: End, 2: Comment
 	isEditing    bool
@@ -131,7 +97,7 @@ type model struct {
 	termHeight int
 
 	confirmNegative bool
-	config          Config
+	config          timedata.Config
 	err             error
 }
 
@@ -157,112 +123,7 @@ func clearToast() tea.Cmd {
 	})
 }
 
-// --- Persistence ---
-
-func loadConfig() (Config, bool) {
-	exePath, _ := os.Executable()
-	configPath := filepath.Join(filepath.Dir(exePath), "config.json")
-	f, err := os.ReadFile(configPath)
-	if err != nil {
-		return Config{
-			WeeklyTarget: 40,
-			ClockColor:   "6",
-			ClockMode:    ClockLarge,
-			ShowDaily:    true,
-			ShowWeekly:   true,
-			ShowMonthly:  true,
-			ShowYearly:   true,
-		}, true
-	}
-	var cfg Config
-	json.Unmarshal(f, &cfg)
-	if cfg.ClockColor == "" {
-		cfg.ClockColor = "6"
-	}
-
-	// Set defaults if missing
-	if !cfg.ShowDaily && !cfg.ShowWeekly && !cfg.ShowMonthly && !cfg.ShowYearly && !cfg.NoGoal {
-		cfg.ShowDaily = true
-		cfg.ShowWeekly = true
-		cfg.ShowMonthly = true
-		cfg.ShowYearly = true
-	}
-
-	needsOnboarding := !cfg.NoGoal && cfg.WeeklyTarget == 0
-	return cfg, needsOnboarding
-}
-
-
-func saveConfig(cfg Config) {
-	exePath, _ := os.Executable()
-	configPath := filepath.Join(filepath.Dir(exePath), "config.json")
-	data, _ := json.MarshalIndent(cfg, "", "  ")
-	os.WriteFile(configPath, data, 0644)
-}
-
-func getRecentComments() []string {
-	exePath, err := os.Executable()
-	if err != nil {
-		return nil
-	}
-	cachePath := filepath.Join(filepath.Dir(exePath), "recent_comments.json")
-	f, err := os.ReadFile(cachePath)
-	if err != nil {
-		defaults := []string{"Coding", "Meeting", "Research", "Documentation", "Testing", "Debugging", "Planning", "Support", "Review", "Design"}
-		saveRecentComments(defaults)
-		return defaults
-	}
-	var comments []string
-	if err := json.Unmarshal(f, &comments); err != nil {
-		return nil
-	}
-	return comments
-}
-
-func saveRecentComments(comments []string) {
-	exePath, _ := os.Executable()
-	cachePath := filepath.Join(filepath.Dir(exePath), "recent_comments.json")
-	if comments == nil {
-		comments = []string{}
-	}
-	data, _ := json.MarshalIndent(comments, "", "  ")
-	os.WriteFile(cachePath, data, 0644)
-}
-
-func (m *model) updateRecentComments(newComment string) {
-	comments := getRecentComments()
-	var updated []string
-	updated = append(updated, newComment)
-	for _, c := range comments {
-		if c != newComment {
-			updated = append(updated, c)
-		}
-	}
-	if len(updated) > 50 {
-		updated = updated[:50]
-	}
-	m.suggestions = updated
-	saveRecentComments(updated)
-}
-
 // --- Helpers ---
-
-func parseTime(val string) (time.Time, error) {
-	now := time.Now()
-	t, err := time.Parse("15:04", val)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("invalid format, use HH:MM")
-	}
-	return time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), 0, 0, now.Location()), nil
-}
-
-func validateTimeFormat(val string) bool {
-	if val == "" {
-		return true
-	}
-	_, err := time.Parse("15:04", val)
-	return err == nil
-}
 
 func renderProgressBar(current time.Duration, target time.Duration, width int) string {
 	if target <= 0 {
@@ -288,128 +149,45 @@ func renderProgressBar(current time.Duration, target time.Duration, width int) s
 // --- Core Logic ---
 
 func (m *model) logToFile() {
-	exePath, err := os.Executable()
-	if err != nil {
-		log.Fatal(err)
-	}
-	exeDir := filepath.Dir(exePath)
-	yearStr := m.startTime.Format("2006")
-	monthStr := m.startTime.Format("01-January")
-	logDir := filepath.Join(exeDir, "logs", yearStr)
-	os.MkdirAll(logDir, 0755)
-	filename := filepath.Join(logDir, monthStr+".md")
-
-	f, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer f.Close()
-
-	info, err := f.Stat()
-	if err == nil && info.Size() == 0 {
-		f.WriteString("| Date | Start | End | Duration | Comment |\n")
-		f.WriteString("| --- | --- | --- | --- | --- |\n")
-	}
-
-	duration := m.endTime.Sub(m.startTime) - m.pausedDuration
 	comment := m.commentInput.Value()
 	if comment == "" {
 		comment = "work"
 	}
+	duration := m.endTime.Sub(m.startTime) - m.pausedDuration
+	timedata.LogTimeEntry(m.startTime, m.endTime, m.pausedDuration, comment)
 	m.updateRecentComments(comment)
 
-	dateStr := m.startTime.Format("2006-01-02")
-	startStr := m.startTime.Format("15:04:05")
-	endStr := m.endTime.Format("15:04:05")
-	row := fmt.Sprintf("| %s | %s | %s | %s | %s |\n", dateStr, startStr, endStr, duration.Round(time.Second), comment)
-	f.WriteString(row)
+	_ = duration
 }
 
-func parseLog() (reportData, error) {
-	exePath, err := os.Executable()
-	if err != nil {
-		return reportData{}, err
-	}
-	logsDir := filepath.Join(filepath.Dir(exePath), "logs")
-	data := reportData{
-		daily:   make(map[string]map[string]time.Duration),
-		weekly:  make(map[string]map[string]time.Duration),
-		monthly: make(map[string]map[string]time.Duration),
-		yearly:  make(map[string]map[string]time.Duration),
-	}
-	filepath.Walk(logsDir, func(path string, info os.FileInfo, err error) error {
-		if err == nil && !info.IsDir() && strings.HasSuffix(info.Name(), ".md") {
-			parseFile(path, &data)
-		}
-		return nil
-	})
-	for k := range data.daily {
-		data.dailyKeys = append(data.dailyKeys, k)
-	}
-	sort.Strings(data.dailyKeys)
-	for k := range data.weekly {
-		data.weeklyKeys = append(data.weeklyKeys, k)
-	}
-	sort.Sort(sort.Reverse(sort.StringSlice(data.weeklyKeys)))
-	for k := range data.monthly {
-		data.monthlyKeys = append(data.monthlyKeys, k)
-	}
-	sort.Sort(sort.Reverse(sort.StringSlice(data.monthlyKeys)))
-	for k := range data.yearly {
-		data.yearlyKeys = append(data.yearlyKeys, k)
-	}
-	sort.Sort(sort.Reverse(sort.StringSlice(data.yearlyKeys)))
-	return data, nil
+func (m *model) updateRecentComments(newComment string) {
+	existing := timedata.GetRecentComments()
+	updated := timedata.UpdateRecentComments(newComment, existing)
+	m.suggestions = updated
 }
 
-func parseFile(path string, data *reportData) {
-	f, err := os.Open(path)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if !strings.HasPrefix(line, "|") || strings.Contains(line, "---") || strings.Contains(line, "| Date |") {
-			continue
+func (m *model) updateFiltered(val string) {
+	m.suggestionIndex = -1
+	if val == "" {
+		limit := 10
+		if len(m.suggestions) < limit {
+			limit = len(m.suggestions)
 		}
-		parts := strings.Split(line, "|")
-		if len(parts) < 6 {
-			continue
+		m.filtered = m.suggestions[:limit]
+	} else {
+		m.filtered = nil
+		for _, s := range m.suggestions {
+			if strings.HasPrefix(strings.ToLower(s), strings.ToLower(val)) {
+				m.filtered = append(m.filtered, s)
+			}
 		}
-		dateStr := strings.TrimSpace(parts[1])
-		durStr := strings.TrimSpace(parts[4])
-		comment := strings.TrimSpace(parts[5])
-		date, _ := time.Parse("2006-01-02", dateStr)
-		duration, _ := time.ParseDuration(durStr)
-		if data.daily[dateStr] == nil {
-			data.daily[dateStr] = make(map[string]time.Duration)
-		}
-		data.daily[dateStr][comment] += duration
-		year, week := date.ISOWeek()
-		weekKey := fmt.Sprintf("%d-W%02d", year, week)
-		if data.weekly[weekKey] == nil {
-			data.weekly[weekKey] = make(map[string]time.Duration)
-		}
-		data.weekly[weekKey][comment] += duration
-		monthKey := date.Format("2006-01")
-		if data.monthly[monthKey] == nil {
-			data.monthly[monthKey] = make(map[string]time.Duration)
-		}
-		data.monthly[monthKey][comment] += duration
-		yearKey := date.Format("2006")
-		if data.yearly[yearKey] == nil {
-			data.yearly[yearKey] = make(map[string]time.Duration)
-		}
-		data.yearly[yearKey][comment] += duration
 	}
 }
 
 // --- Initial Model ---
 
 func initialModel() model {
-	cfg, onboarding := loadConfig()
+	cfg, onboarding := timedata.LoadConfig()
 	s := textinput.New()
 	s.Placeholder = "Start Time (HH:MM or blank for now)"
 	s.Focus()
@@ -419,7 +197,7 @@ func initialModel() model {
 	c.Placeholder = "Comment (defaults to 'work')"
 	ct := textinput.New()
 	ct.Placeholder = "New task description"
-	suggestions := getRecentComments()
+	suggestions := timedata.GetRecentComments()
 	m := model{
 		view:            viewSetup,
 		focusIndex:      0,
@@ -439,24 +217,6 @@ func initialModel() model {
 	}
 	m.updateFiltered("")
 	return m
-}
-
-func (m *model) updateFiltered(val string) {
-	m.suggestionIndex = -1
-	if val == "" {
-		limit := 10
-		if len(m.suggestions) < limit {
-			limit = len(m.suggestions)
-		}
-		m.filtered = m.suggestions[:limit]
-	} else {
-		m.filtered = nil
-		for _, s := range m.suggestions {
-			if strings.HasPrefix(strings.ToLower(s), strings.ToLower(val)) {
-				m.filtered = append(m.filtered, s)
-			}
-		}
-	}
 }
 
 func (m model) Init() tea.Cmd {
@@ -480,7 +240,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.reportData = msg
 		m.repCursor = 0
 		return m, nil
-	case []entry:
+	case []timedata.TimeEntry:
 		m.dayEntries = msg
 		if m.dayCursor >= len(m.dayEntries) {
 			m.dayCursor = 0
@@ -522,7 +282,7 @@ func (m model) updateOnboarding(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "n":
 			m.config.NoGoal = true
 			m.config.WeeklyTarget = 0
-			saveConfig(m.config)
+			timedata.SaveConfig(m.config)
 			m.view = viewSetup
 			m.startTimeInput.Placeholder = "Start Time (HH:MM or blank for now)"
 			m.startTimeInput.SetValue("")
@@ -535,7 +295,7 @@ func (m model) updateOnboarding(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.config.WeeklyTarget = val
 			m.config.NoGoal = false
-			saveConfig(m.config)
+			timedata.SaveConfig(m.config)
 			m.view = viewSetup
 			m.startTimeInput.Placeholder = "Start Time (HH:MM or blank for now)"
 			m.startTimeInput.SetValue("")
@@ -638,7 +398,7 @@ func (m model) updateSetup(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					val = m.endTimeInput.Value()
 				}
-				if !validateTimeFormat(val) {
+				if !timedata.ValidateTimeFormat(val) {
 					m.err = fmt.Errorf("invalid format")
 					return m, nil
 				}
@@ -649,7 +409,7 @@ func (m model) updateSetup(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.err = nil
 			valStart := m.startTimeInput.Value()
-			if !validateTimeFormat(valStart) {
+			if !timedata.ValidateTimeFormat(valStart) {
 				m.err = fmt.Errorf("invalid start time")
 				m.focusIndex = 0
 				m.updateFocus()
@@ -658,17 +418,17 @@ func (m model) updateSetup(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if valStart == "" {
 				m.startTime = time.Now()
 			} else {
-				m.startTime, _ = parseTime(valStart)
+				m.startTime, _ = timedata.ParseTime(valStart)
 			}
 			valEnd := m.endTimeInput.Value()
 			if valEnd != "" {
-				if !validateTimeFormat(valEnd) {
+				if !timedata.ValidateTimeFormat(valEnd) {
 					m.err = fmt.Errorf("invalid end time")
 					m.focusIndex = 1
 					m.updateFocus()
 					return m, nil
 				}
-				m.endTime, _ = parseTime(valEnd)
+				m.endTime, _ = timedata.ParseTime(valEnd)
 				if m.endTime.Before(m.startTime) && !m.confirmNegative {
 					m.confirmNegative = true
 					return m, nil
@@ -825,8 +585,7 @@ func (m model) updateTimer(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 				m.logToFile()
-				
-				// Add new task to recent comments cache AFTER logging the old one
+
 				m.updateRecentComments(newComment)
 
 				m.startTime = m.endTime
@@ -884,7 +643,7 @@ func (m model) updateReports(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case ",":
 			m.view = viewSettings
 			m.state = stateSettings
-			m.toastMsg = "fromReports" // Mark source
+			m.toastMsg = "fromReports"
 			return m, nil
 		}
 	}
@@ -903,7 +662,7 @@ func (m model) updateSettings(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "q":
 			return m, tea.Quit
 		case "esc", ",":
-			saveConfig(m.config)
+			timedata.SaveConfig(m.config)
 			if m.view == viewTimer {
 				m.state = stateTracking
 				return m, tick()
@@ -1045,30 +804,30 @@ func (m model) updateDay(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case "enter":
 				newVal := m.editInput.Value()
-				if m.colCursor < 2 && !validateTimeFormat(newVal) {
+				if m.colCursor < 2 && !timedata.ValidateTimeFormat(newVal) {
 					m.err = fmt.Errorf("invalid format")
 					return m, nil
 				}
 				e := m.dayEntries[m.dayCursor]
 				if m.colCursor == 0 {
-					e.start, _ = time.Parse("15:04:05", newVal+":00")
+					e.Start, _ = time.Parse("15:04:05", newVal+":00")
 				} else if m.colCursor == 1 {
-					e.end, _ = time.Parse("15:04:05", newVal+":00")
+					e.End, _ = time.Parse("15:04:05", newVal+":00")
 				} else {
-					e.comment = newVal
+					e.Comment = newVal
 				}
-				if e.end.Before(e.start) && !m.confirmNegative {
+				if e.End.Before(e.Start) && !m.confirmNegative {
 					m.confirmNegative = true
 					return m, nil
 				}
-				e.duration = e.end.Sub(e.start)
-				m.createDayBackup()
+				e.Duration = e.End.Sub(e.Start)
+				timedata.CreateDayBackup(m.selectedDate)
 				if m.colCursor == 2 {
-					m.updateRecentComments(e.comment)
+					m.updateRecentComments(e.Comment)
 				}
 
 				m.dayEntries[m.dayCursor] = e
-				m.saveDayChanges()
+				timedata.SaveDayChanges(m.selectedDate, m.dayEntries)
 				m.isEditing = false
 				m.err = nil
 				m.confirmNegative = false
@@ -1090,7 +849,7 @@ func (m model) updateDay(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateFocus()
 			return m, nil
 		case "u":
-			m.restoreDayBackup()
+			timedata.RestoreDayBackup(m.selectedDate)
 			m.toastMsg = "Undone!"
 			return m, tea.Batch(m.loadDayEntries(), clearToast())
 		case "a":
@@ -1144,11 +903,11 @@ func (m model) updateDay(msg tea.Msg) (tea.Model, tea.Cmd) {
 				e := m.dayEntries[m.dayCursor]
 				val := ""
 				if m.colCursor == 0 {
-					val = e.start.Format("15:04")
+					val = e.Start.Format("15:04")
 				} else if m.colCursor == 1 {
-					val = e.end.Format("15:04")
+					val = e.End.Format("15:04")
 				} else {
-					val = e.comment
+					val = e.Comment
 				}
 				m.editInput.SetValue(val)
 				m.editInput.Focus()
@@ -1156,9 +915,9 @@ func (m model) updateDay(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "delete", "backspace":
 			if m.dayCursor > -1 && len(m.dayEntries) > 0 {
-				m.createDayBackup()
+				timedata.CreateDayBackup(m.selectedDate)
 				m.dayEntries = append(m.dayEntries[:m.dayCursor], m.dayEntries[m.dayCursor+1:]...)
-				m.saveDayChanges()
+				timedata.SaveDayChanges(m.selectedDate, m.dayEntries)
 				if m.dayCursor >= len(m.dayEntries) && m.dayCursor > 0 {
 					m.dayCursor--
 				}
@@ -1193,12 +952,12 @@ func (m model) updateDayAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.updateFocus()
 				return m, nil
 			}
-			if !validateTimeFormat(valStart) || !validateTimeFormat(valEnd) {
+			if !timedata.ValidateTimeFormat(valStart) || !timedata.ValidateTimeFormat(valEnd) {
 				m.err = fmt.Errorf("invalid time format")
 				return m, nil
 			}
-			st, _ := parseTime(valStart)
-			et, _ := parseTime(valEnd)
+			st, _ := timedata.ParseTime(valStart)
+			et, _ := timedata.ParseTime(valEnd)
 			st = time.Date(m.selectedDate.Year(), m.selectedDate.Month(), m.selectedDate.Day(), st.Hour(), st.Minute(), 0, 0, st.Location())
 			et = time.Date(m.selectedDate.Year(), m.selectedDate.Month(), m.selectedDate.Day(), et.Hour(), et.Minute(), 0, 0, et.Location())
 			if et.Before(st) && !m.confirmNegative {
@@ -1207,51 +966,45 @@ func (m model) updateDayAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
-			// Handle cross-midnight entry
 			if m.confirmNegative && msg.String() == "c" {
-				// Part 1: current day
 				todayStart := st
 				todayEnd := time.Date(st.Year(), st.Month(), st.Day(), 23, 59, 59, 0, st.Location())
-				
-				// Part 2: next day
+
 				tomorrow := m.selectedDate.AddDate(0, 0, 1)
 				tomorrowStart := time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 0, 0, 0, 0, st.Location())
-				tomorrowEnd := et.AddDate(0, 0, 1) // et is already today's date
+				tomorrowEnd := et.AddDate(0, 0, 1)
 
-				m.createDayBackup()
-				// Add Part 1
-				e1 := entry{date: m.selectedDate, start: todayStart, end: todayEnd, duration: todayEnd.Sub(todayStart), comment: m.commentInput.Value()}
-				// Add Part 2
-				e2 := entry{date: tomorrow, start: tomorrowStart, end: tomorrowEnd, duration: tomorrowEnd.Sub(tomorrowStart), comment: m.commentInput.Value()}
-				if e1.comment == "" { e1.comment = "work" }
-				if e2.comment == "" { e2.comment = "work" }
+				timedata.CreateDayBackup(m.selectedDate)
+				e1 := timedata.TimeEntry{Date: m.selectedDate, Start: todayStart, End: todayEnd, Duration: todayEnd.Sub(todayStart), Comment: m.commentInput.Value()}
+				e2 := timedata.TimeEntry{Date: tomorrow, Start: tomorrowStart, End: tomorrowEnd, Duration: tomorrowEnd.Sub(tomorrowStart), Comment: m.commentInput.Value()}
+				if e1.Comment == "" { e1.Comment = "work" }
+				if e2.Comment == "" { e2.Comment = "work" }
 
 				m.dayEntries = append(m.dayEntries, e1, e2)
-				m.saveDayChanges()
-				
+				timedata.SaveDayChanges(m.selectedDate, m.dayEntries)
+
 				m.confirmNegative = false
 				m.err = nil
 				m.view = viewDay
 				return m, m.loadDayEntries()
 			}
 
-			m.createDayBackup()
-			newEntry := entry{
-				date:     m.selectedDate,
-				start:    st,
-				end:      et,
-				duration: et.Sub(st),
-				comment:  m.commentInput.Value(),
+			timedata.CreateDayBackup(m.selectedDate)
+			newEntry := timedata.TimeEntry{
+				Date:     m.selectedDate,
+				Start:    st,
+				End:      et,
+				Duration: et.Sub(st),
+				Comment:  m.commentInput.Value(),
 			}
-			if newEntry.comment == "" {
-				newEntry.comment = "work"
+			if newEntry.Comment == "" {
+				newEntry.Comment = "work"
 			}
 
-			// Update recent comments cache
-			m.updateRecentComments(newEntry.comment)
+			m.updateRecentComments(newEntry.Comment)
 
 			m.dayEntries = append(m.dayEntries, newEntry)
-			m.saveDayChanges()
+			timedata.SaveDayChanges(m.selectedDate, m.dayEntries)
 			m.view = viewDay
 			m.err = nil
 			m.confirmNegative = false
@@ -1347,7 +1100,7 @@ func (m model) viewOnboarding() string {
 func (m model) viewSetup() string {
 	var s strings.Builder
 	titleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Bold(true)
-	s.WriteString(titleStyle.Render("tuitime") + " " + lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render("v1.0.5") + "\n\n")
+	s.WriteString(titleStyle.Render("tuitime") + " " + lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render("v1.1.0") + "\n\n")
 
 	// Menu
 	for i, item := range menuItems {
@@ -1365,7 +1118,7 @@ func (m model) viewSetup() string {
 	if m.endTimeInput.Value() != "" {
 		modeText = "MANUAL LOG"
 	}
-	
+
 	s.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render("Session Setup ["+modeText+"]") + "\n\n")
 	s.WriteString(fmt.Sprintf("Start Time: %s\n", m.startTimeInput.View()))
 	s.WriteString(fmt.Sprintf("End Time:   %s\n", m.endTimeInput.View()))
@@ -1457,8 +1210,7 @@ func (m model) viewReports() string {
 		s.WriteString(lipgloss.NewStyle().Underline(true).Render(title) + "\n")
 		for _, k := range keys {
 			total := time.Duration(0)
-			
-			// Sort comments for deterministic output
+
 			var comments []string
 			for c := range data[k] {
 				comments = append(comments, c)
@@ -1469,14 +1221,13 @@ func (m model) viewReports() string {
 			if !m.config.NoGoal {
 				bar := renderProgressBar(total, target, 20)
 				targetHours := float64(target) / float64(time.Hour)
-				// Use lipgloss to format into fixed-width columns for better alignment
 				keyStyle := lipgloss.NewStyle().Width(14)
 				timeStyle := lipgloss.NewStyle().Width(12).Align(lipgloss.Right)
 				targetStyle := lipgloss.NewStyle().Width(8).Align(lipgloss.Right)
 
-				line := fmt.Sprintf("%s: %s of %s %s", 
-					keyStyle.Render(k), 
-					timeStyle.Render(total.Round(time.Minute).String()), 
+				line := fmt.Sprintf("%s: %s of %s %s",
+					keyStyle.Render(k),
+					timeStyle.Render(total.Round(time.Minute).String()),
 					targetStyle.Render(fmt.Sprintf("%.1fh", targetHours)),
 					bar)
 				s.WriteString(line + "\n")
@@ -1507,13 +1258,11 @@ func (m model) viewReports() string {
 
 	s.WriteString("(esc) back  (,) settings")
 
-	// Basic Scrolling implementation
 	lines := strings.Split(s.String(), "\n")
-	
-	// Dynamic Window size based on terminal height
-	maxViewLines := m.termHeight - 4 // Subtract padding/margins
+
+	maxViewLines := m.termHeight - 4
 	if maxViewLines < 10 {
-		maxViewLines = 25 // Fallback for very small or uninitialized terminals
+		maxViewLines = 25
 	}
 
 	if m.repCursor > len(lines)-maxViewLines {
@@ -1535,7 +1284,6 @@ func (m model) viewSettings() string {
 	s := lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Bold(true).Render("Settings") + "\n\n"
 
 	if m.view == viewReports || m.toastMsg == "fromReports" {
-		// Report Settings
 		s += "--- Report Content ---\n"
 		check := func(b bool) string {
 			if b {
@@ -1554,7 +1302,7 @@ func (m model) viewSettings() string {
 			targetStr = m.editInput.View()
 		}
 		s += fmt.Sprintf("(t) Weekly Target: %s hours\n", targetStr)
-		
+
 		workingWeeks := 52.0 - float64(m.config.VacationDays)/5.0
 		yearlyVal := m.config.YearlyTarget
 		if !m.config.PreferYearly {
@@ -1572,11 +1320,10 @@ func (m model) viewSettings() string {
 		}
 		s += fmt.Sprintf("(v) Vacation Days: %s days\n", vacationStr)
 	} else {
-		// Timer Settings
 		modeName := "Large ASCII"
-		if m.config.ClockMode == ClockPlain {
+		if m.config.ClockMode == timedata.ClockPlain {
 			modeName = "Plain Text"
-		} else if m.config.ClockMode == ClockSmall {
+		} else if m.config.ClockMode == timedata.ClockSmall {
 			modeName = "Small ASCII"
 		}
 		s += fmt.Sprintf("(m) Clock Mode:  %s\n", modeName)
@@ -1589,8 +1336,7 @@ func (m model) viewSettings() string {
 
 func (m model) viewDay() string {
 	var s strings.Builder
-	
-	// Date Header
+
 	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("5"))
 	dateText := "Day View: " + m.selectedDate.Format("2006-01-02")
 	if m.dayCursor == -1 {
@@ -1604,7 +1350,7 @@ func (m model) viewDay() string {
 		s.WriteString(fmt.Sprintf("Start Time: %s\n", m.startTimeInput.View()))
 		s.WriteString(fmt.Sprintf("End Time:   %s\n", m.endTimeInput.View()))
 		s.WriteString(fmt.Sprintf("Comment:    %s\n", m.commentInput.View()))
-		
+
 		if m.focusIndex == 2 && len(m.filtered) > 0 {
 			s.WriteString("\nSuggestions:\n")
 			for i, f := range m.filtered {
@@ -1634,9 +1380,9 @@ func (m model) viewDay() string {
 			if i == m.dayCursor {
 				style = style.Background(lipgloss.Color("235"))
 			}
-			startStr := e.start.Format("15:04")
-			endStr := e.end.Format("15:04")
-			commStr := e.comment
+			startStr := e.Start.Format("15:04")
+			endStr := e.End.Format("15:04")
+			commStr := e.Comment
 			if i == m.dayCursor && m.isEditing {
 				if m.colCursor == 0 {
 					startStr = m.editInput.View()
@@ -1655,7 +1401,7 @@ func (m model) viewDay() string {
 					commStr = selStyle.Render(commStr)
 				}
 			}
-			durStr := e.duration.Round(time.Second).String()
+			durStr := e.Duration.Round(time.Second).String()
 			s.WriteString(style.Render(fmt.Sprintf("%s - %s | %s | %s", startStr, endStr, durStr, commStr)) + "\n")
 		}
 	}
@@ -1681,142 +1427,31 @@ func (m model) viewDay() string {
 
 func (m model) loadReports() tea.Cmd {
 	return func() tea.Msg {
-		data, err := parseLog()
+		data, err := timedata.ParseLog()
 		if err != nil {
 			return err
 		}
-		return data
+		rd := reportData{
+			daily:      data.Daily,
+			weekly:     data.Weekly,
+			monthly:    data.Monthly,
+			yearly:     data.Yearly,
+			dailyKeys:  data.DailyKeys,
+			weeklyKeys: data.WeeklyKeys,
+			monthlyKeys: data.MonthlyKeys,
+			yearlyKeys: data.YearlyKeys,
+		}
+		return rd
 	}
 }
 
 func (m model) loadDayEntries() tea.Cmd {
 	return func() tea.Msg {
-		dateStr := m.selectedDate.Format("2006-01-02")
-		exePath, _ := os.Executable()
-		yearStr := m.selectedDate.Format("2006")
-		monthStr := m.selectedDate.Format("01-January")
-		logPath := filepath.Join(filepath.Dir(exePath), "logs", yearStr, monthStr+".md")
-		f, err := os.Open(logPath)
+		entries, err := timedata.LoadDayEntries(m.selectedDate)
 		if err != nil {
-			return []entry{}
+			return err
 		}
-		defer f.Close()
-		var entries []entry
-		scanner := bufio.NewScanner(f)
-		for scanner.Scan() {
-			line := scanner.Text()
-			if !strings.Contains(line, "| "+dateStr+" |") {
-				continue
-			}
-			parts := strings.Split(line, "|")
-			if len(parts) < 6 {
-				continue
-			}
-			startStr := strings.TrimSpace(parts[2])
-			endStr := strings.TrimSpace(parts[3])
-			durStr := strings.TrimSpace(parts[4])
-			comment := strings.TrimSpace(parts[5])
-			st, _ := time.Parse("15:04:05", startStr)
-			et, _ := time.Parse("15:04:05", endStr)
-			dur, _ := time.ParseDuration(durStr)
-			entries = append(entries, entry{
-				date:     m.selectedDate,
-				start:    st,
-				end:      et,
-				duration: dur,
-				comment:  comment,
-				original: line,
-			})
-		}
-		
-		sort.Slice(entries, func(i, j int) bool {
-			return entries[i].start.Before(entries[j].start)
-		})
-		
 		return entries
-	}
-}
-
-func (m *model) createDayBackup() {
-	exePath, _ := os.Executable()
-	yearStr := m.selectedDate.Format("2006")
-	monthStr := m.selectedDate.Format("01-January")
-	logPath := filepath.Join(filepath.Dir(exePath), "logs", yearStr, monthStr+".md")
-	backupPath := logPath + ".bak"
-	input, err := os.ReadFile(logPath)
-	if err == nil {
-		os.WriteFile(backupPath, input, 0644)
-	}
-}
-
-func (m *model) restoreDayBackup() {
-	exePath, _ := os.Executable()
-	yearStr := m.selectedDate.Format("2006")
-	monthStr := m.selectedDate.Format("01-January")
-	logPath := filepath.Join(filepath.Dir(exePath), "logs", yearStr, monthStr+".md")
-	backupPath := logPath + ".bak"
-	input, err := os.ReadFile(backupPath)
-	if err == nil {
-		os.WriteFile(logPath, input, 0644)
-	}
-}
-
-func (m model) saveDayChanges() {
-	exePath, _ := os.Executable()
-	exeDir := filepath.Dir(exePath)
-	yearStr := m.selectedDate.Format("2006")
-	monthStr := m.selectedDate.Format("01-January")
-	logDir := filepath.Join(exeDir, "logs", yearStr)
-	os.MkdirAll(logDir, 0755)
-	logPath := filepath.Join(logDir, monthStr+".md")
-	dateStr := m.selectedDate.Format("2006-01-02")
-
-	var otherLines []string
-	f, err := os.Open(logPath)
-	if err == nil {
-		scanner := bufio.NewScanner(f)
-		for scanner.Scan() {
-			line := scanner.Text()
-			if !strings.Contains(line, "| "+dateStr+" |") {
-				otherLines = append(otherLines, line)
-			}
-		}
-		f.Close()
-	}
-
-	var newLines []string
-	for _, e := range m.dayEntries {
-		row := fmt.Sprintf("| %s | %s | %s | %s | %s |",
-			dateStr,
-			e.start.Format("15:04:05"),
-			e.end.Format("15:04:05"),
-			e.duration.Round(time.Second),
-			e.comment,
-		)
-		newLines = append(newLines, row)
-	}
-
-	f, err = os.OpenFile(logPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-
-	headerDone := false
-	for _, l := range otherLines {
-		if strings.HasPrefix(l, "| Date |") {
-			headerDone = true
-		}
-		f.WriteString(l + "\n")
-	}
-
-	if !headerDone {
-		f.WriteString("| Date | Start | End | Duration | Comment |\n")
-		f.WriteString("| --- | --- | --- | --- | --- |\n")
-	}
-
-	for _, l := range newLines {
-		f.WriteString(l + "\n")
 	}
 }
 
@@ -1848,13 +1483,13 @@ var digitsSmall = map[rune][]string{
 	':': {"   ", " █ ", "   ", " █ ", "   "},
 }
 
-func renderClock(t string, mode ClockMode) string {
-	if mode == ClockPlain {
+func renderClock(t string, mode timedata.ClockMode) string {
+	if mode == timedata.ClockPlain {
 		return t
 	}
 	var dMap map[rune][]string
 	var rows int
-	if mode == ClockLarge {
+	if mode == timedata.ClockLarge {
 		dMap = digitsLarge
 		rows = 7
 	} else {
@@ -1875,6 +1510,13 @@ func renderClock(t string, mode ClockMode) string {
 }
 
 func main() {
+	for _, arg := range os.Args[1:] {
+		if arg == "--web" {
+			startWebServer()
+			return
+		}
+	}
+
 	p := tea.NewProgram(initialModel())
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error: %v", err)

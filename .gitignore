@@ -4,5 +4,5 @@ tuitime-win/
 config.json
 recent_comments.json
 logs/
-*.tar.gz
-*.zip
+timetracker-code/tuitime
+timetracker-code/test_binary
