@@ -472,7 +472,7 @@ async function refreshReports() {
     if (!cfg.no_goal) {
       const goalHeader = document.createElement('div');
       goalHeader.style.cssText = 'text-align:center;padding:12px;background:var(--surface);border-radius:var(--radius);margin-bottom:8px';
-      goalHeader.innerHTML = `<strong>Goal: ${cfg.weekly_target}h/week</strong>`;
+      goalHeader.innerHTML = `<strong>Goal: ${cfg.weekly_target.toFixed(1)}h/week</strong>`;
       container.appendChild(goalHeader);
     }
 
