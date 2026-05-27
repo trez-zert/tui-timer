@@ -67,10 +67,10 @@ func startWebServer() {
 	fileServer := http.FileServer(http.FS(sub))
 	mux.Handle("/", fileServer)
 
-	addr := fmt.Sprintf("localhost:%d", port)
+	addr := fmt.Sprintf(":%d", port)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		addr = fmt.Sprintf(":%d", port)
+		addr = fmt.Sprintf("localhost:%d", port)
 		listener, err = net.Listen("tcp", addr)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error starting server: %v\n", err)
