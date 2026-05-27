@@ -460,6 +460,10 @@ async function deleteEntry(idx, dateStr) {
 }
 
 // --- Reports ---
+
+const reportWindows = { daily: 5, weekly: 5, monthly: 12, yearly: 10 };
+const reportOffsets = { daily: 0, weekly: 0, monthly: 0, yearly: 0 };
+
 async function refreshReports() {
   const container = document.getElementById('reports-content');
   container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-dim)">Loading...</div>';
@@ -483,9 +487,17 @@ async function refreshReports() {
       { key: 'yearly', label: 'Yearly Totals', items: data.yearly, target: data.weekly_target_ns * 52 },
     ];
 
-    sections.forEach(s => {
-      if (!cfg['show_' + s.key] && !cfg.no_goal) return;
-      if (!s.items || s.items.length === 0) return;
+    const renderReportSection = (s) => {
+      if (!cfg['show_' + s.key] && !cfg.no_goal) return null;
+      if (!s.items || s.items.length === 0) return null;
+
+      const win = reportWindows[s.key];
+      const offset = reportOffsets[s.key];
+      const start = offset;
+      const end = Math.min(start + win, s.items.length);
+      const pageItems = s.items.slice(start, end);
+      const totalPages = Math.ceil(s.items.length / win);
+      const currentPage = totalPages === 0 ? 0 : Math.floor(offset / win) + 1;
 
       const section = document.createElement('div');
       section.className = 'report-section';
@@ -497,7 +509,7 @@ async function refreshReports() {
       const body = document.createElement('div');
       body.className = 'report-body';
 
-      s.items.forEach(item => {
+      pageItems.forEach(item => {
         const div = document.createElement('div');
         div.className = 'report-item';
 
@@ -531,6 +543,39 @@ async function refreshReports() {
         body.appendChild(div);
       });
 
+      const nav = document.createElement('div');
+      nav.className = 'report-page-nav';
+
+      const prevBtn = document.createElement('button');
+      prevBtn.className = 'btn-page-nav';
+      prevBtn.innerHTML = '◀ newer';
+      prevBtn.disabled = currentPage <= 1;
+      prevBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        reportOffsets[s.key] = Math.max(0, reportOffsets[s.key] - win);
+        renderAllSections();
+      });
+
+      const nextBtn = document.createElement('button');
+      nextBtn.className = 'btn-page-nav';
+      nextBtn.innerHTML = 'older ▶';
+      nextBtn.disabled = currentPage >= totalPages;
+      nextBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        reportOffsets[s.key] = Math.min(s.items.length - win, reportOffsets[s.key] + win);
+        if (reportOffsets[s.key] < 0) reportOffsets[s.key] = 0;
+        renderAllSections();
+      });
+
+      const pageLabel = document.createElement('span');
+      pageLabel.className = 'page-label';
+      pageLabel.textContent = `${currentPage}/${totalPages}`;
+
+      nav.appendChild(prevBtn);
+      nav.appendChild(pageLabel);
+      nav.appendChild(nextBtn);
+      body.appendChild(nav);
+
       header.addEventListener('click', () => {
         header.classList.toggle('collapsed');
         body.classList.toggle('collapsed');
@@ -538,12 +583,31 @@ async function refreshReports() {
 
       section.appendChild(header);
       section.appendChild(body);
-      container.appendChild(section);
-    });
+      return section;
+    };
 
-    if (container.children.length === 1) {
-      container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-dim)">No logs yet.</div>';
-    }
+    const renderAllSections = () => {
+      container.innerHTML = '';
+      if (!cfg.no_goal) {
+        const goalHeader = document.createElement('div');
+        goalHeader.style.cssText = 'text-align:center;padding:12px;background:var(--surface);border-radius:var(--radius);margin-bottom:8px';
+        goalHeader.innerHTML = `<strong>Goal: ${cfg.weekly_target.toFixed(1)}h/week</strong>`;
+        container.appendChild(goalHeader);
+      }
+      let rendered = 0;
+      sections.forEach(s => {
+        const el = renderReportSection(s);
+        if (el) {
+          container.appendChild(el);
+          rendered++;
+        }
+      });
+      if (rendered === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-dim)">No logs yet.</div>';
+      }
+    };
+
+    renderAllSections();
   } catch (e) {
     container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--red)">Failed to load reports</div>';
   }

@@ -218,7 +218,7 @@ func ParseLog() (ReportData, error) {
 	for k := range data.Daily {
 		data.DailyKeys = append(data.DailyKeys, k)
 	}
-	sort.Strings(data.DailyKeys)
+	sort.Sort(sort.Reverse(sort.StringSlice(data.DailyKeys)))
 	for k := range data.Weekly {
 		data.WeeklyKeys = append(data.WeeklyKeys, k)
 	}

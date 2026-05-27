@@ -345,6 +345,37 @@ html, body {
   color: var(--text-dim);
 }
 
+.report-page-nav {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0 4px;
+}
+
+.btn-page-nav {
+  background: var(--surface2);
+  color: var(--primary);
+  border: none;
+  padding: 6px 14px;
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.btn-page-nav:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.page-label {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  min-width: 40px;
+  text-align: center;
+}
+
 /* Settings */
 .settings-list {
   display: flex;

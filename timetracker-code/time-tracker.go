@@ -84,6 +84,7 @@ type model struct {
 	// Reports
 	reportData reportData
 	repCursor  int
+	repPage    int
 
 	// Day View
 	selectedDate time.Time
@@ -105,6 +106,13 @@ type model struct {
 
 var colors = []string{"1", "2", "3", "4", "5", "6", "7"} // Red, Green, Yellow, Blue, Magenta, Cyan, White
 var menuItems = []string{"Reports", "Day View", "Settings", "Quit"}
+
+const (
+	dailyWindow   = 5
+	weeklyWindow  = 5
+	monthlyWindow = 12
+	yearlyWindow  = 10
+)
 
 // --- Messages ---
 
@@ -633,13 +641,12 @@ func (m model) updateReports(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "down", "j":
 			m.repCursor++
-		case "pgup", "pageup":
-			m.repCursor -= 10
-			if m.repCursor < 0 {
-				m.repCursor = 0
+		case "left", "h":
+			m.repPage++
+		case "right", "l":
+			if m.repPage > 0 {
+				m.repPage--
 			}
-		case "pgdown", "pagedown":
-			m.repCursor += 10
 		case ",":
 			m.view = viewSettings
 			m.state = stateSettings
@@ -1206,9 +1213,24 @@ func (m model) viewReports() string {
 	monthlyTarget := weeklyTarget * 52 / 12
 	yearlyTarget := (weeklyTarget * 52) - (time.Duration(m.config.VacationDays) * dailyTarget)
 
-	renderSection := func(title string, target time.Duration, keys []string, data map[string]map[string]time.Duration) {
-		s.WriteString(lipgloss.NewStyle().Underline(true).Render(title) + "\n")
-		for _, k := range keys {
+	renderSection := func(sectionTitle string, target time.Duration, keys []string, data map[string]map[string]time.Duration, windowSize int) {
+		s.WriteString(lipgloss.NewStyle().Underline(true).Render(sectionTitle) + "\n")
+
+		start := m.repPage * windowSize
+		end := start + windowSize
+		if start >= len(keys) {
+			start = 0
+		}
+		if end > len(keys) {
+			end = len(keys)
+		}
+		visibleKeys := keys[start:end]
+		totalPages := 1
+		if len(keys) > 0 {
+			totalPages = (len(keys) + windowSize - 1) / windowSize
+		}
+
+		for _, k := range visibleKeys {
 			total := time.Duration(0)
 
 			var comments []string
@@ -1240,23 +1262,24 @@ func (m model) viewReports() string {
 				s.WriteString(fmt.Sprintf("  - %s: %s\n", comment, dur.Round(time.Minute)))
 			}
 		}
+		s.WriteString(fmt.Sprintf("  ← page %d/%d →\n", m.repPage+1, totalPages))
 		s.WriteString("\n")
 	}
 
 	if m.config.ShowDaily {
-		renderSection("DAILY TOTALS", dailyTarget, m.reportData.dailyKeys, m.reportData.daily)
+		renderSection("DAILY TOTALS", dailyTarget, m.reportData.dailyKeys, m.reportData.daily, dailyWindow)
 	}
 	if m.config.ShowWeekly {
-		renderSection("WEEKLY TOTALS", weeklyTarget, m.reportData.weeklyKeys, m.reportData.weekly)
+		renderSection("WEEKLY TOTALS", weeklyTarget, m.reportData.weeklyKeys, m.reportData.weekly, weeklyWindow)
 	}
 	if m.config.ShowMonthly {
-		renderSection("MONTHLY TOTALS", monthlyTarget, m.reportData.monthlyKeys, m.reportData.monthly)
+		renderSection("MONTHLY TOTALS", monthlyTarget, m.reportData.monthlyKeys, m.reportData.monthly, monthlyWindow)
 	}
 	if m.config.ShowYearly {
-		renderSection("YEARLY TOTALS", yearlyTarget, m.reportData.yearlyKeys, m.reportData.yearly)
+		renderSection("YEARLY TOTALS", yearlyTarget, m.reportData.yearlyKeys, m.reportData.yearly, yearlyWindow)
 	}
 
-	s.WriteString("(esc) back  (,) settings")
+	s.WriteString("\n(←/→) navigate pages  (up/down) scroll  (esc) back")
 
 	lines := strings.Split(s.String(), "\n")
 
