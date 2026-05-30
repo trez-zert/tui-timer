@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -141,7 +142,10 @@ func ParseTime(val string) (time.Time, error) {
 	now := time.Now()
 	t, err := time.Parse("15:04", val)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("invalid format, use HH:MM")
+		t, err = time.Parse("1504", val)
+		if err != nil {
+			return time.Time{}, fmt.Errorf("invalid format, use HH:MM or HHMM")
+		}
 	}
 	return time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), 0, 0, now.Location()), nil
 }
@@ -151,6 +155,9 @@ func ValidateTimeFormat(val string) bool {
 		return true
 	}
 	_, err := time.Parse("15:04", val)
+	if err != nil {
+		_, err = time.Parse("1504", val)
+	}
 	return err == nil
 }
 
@@ -392,4 +399,53 @@ func SaveDayChanges(date time.Time, entries []TimeEntry) {
 	for _, l := range newLines {
 		f.WriteString(l + "\n")
 	}
+}
+
+func AcquireLock() (func(), error) {
+	lockPath := filepath.Join(GetExeDir(), "tuitime.lock")
+
+	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+	if err != nil {
+		data, readErr := os.ReadFile(lockPath)
+		info, statErr := os.Stat(lockPath)
+		if readErr != nil || statErr != nil {
+			return nil, fmt.Errorf("another instance may be running")
+		}
+		if time.Since(info.ModTime()) > 5*time.Minute {
+			os.Remove(lockPath)
+			f, err = os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+			if err != nil {
+				return nil, fmt.Errorf("another instance is running (lock contested)")
+			}
+		} else {
+			pid := strings.TrimSpace(string(data))
+			return nil, fmt.Errorf("another instance is already running (PID %s)", pid)
+		}
+	}
+
+	fmt.Fprintf(f, "%d\n", os.Getpid())
+	f.Close()
+
+	return func() { os.Remove(lockPath) }, nil
+}
+
+func WeekKeyToRange(key string) string {
+	parts := strings.SplitN(key, "-W", 2)
+	if len(parts) != 2 {
+		return ""
+	}
+	year, errY := strconv.Atoi(parts[0])
+	week, errW := strconv.Atoi(parts[1])
+	if errY != nil || errW != nil {
+		return ""
+	}
+	jan4 := time.Date(year, 1, 4, 0, 0, 0, 0, time.UTC)
+	weekday := int(jan4.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	monday := jan4.AddDate(0, 0, 1-weekday)
+	monday = monday.AddDate(0, 0, (week-1)*7)
+	sunday := monday.AddDate(0, 0, 6)
+	return fmt.Sprintf("(%s-%s)", monday.Format("Jan 2"), sunday.Format("Jan 2"))
 }

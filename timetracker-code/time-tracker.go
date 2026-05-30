@@ -3,9 +3,11 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/signal"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"time-tracker/pkg/timedata"
@@ -82,9 +84,17 @@ type model struct {
 	toastMsg string
 
 	// Reports
-	reportData reportData
-	repCursor  int
-	repPage    int
+	reportData     reportData
+	repCursor      int
+	repPage        int
+	reportSortMode int // 0=alpha, 1=hours desc, 2=recent
+
+	// Web server
+	webInfo     WebServerInfo
+	showWebInfo bool
+
+	// Timer screen total
+	todayLogged time.Duration
 
 	// Day View
 	selectedDate time.Time
@@ -100,6 +110,8 @@ type model struct {
 	confirmNegative bool
 	config          timedata.Config
 	err             error
+
+	sharedTimer *SharedTimer
 }
 
 // --- Globals ---
@@ -118,6 +130,7 @@ const (
 
 type tickMsg time.Time
 type clearToastMsg struct{}
+type todayTotalMsg time.Duration
 
 func tick() tea.Cmd {
 	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
@@ -188,13 +201,13 @@ func (m *model) updateFiltered(val string) {
 			if strings.HasPrefix(strings.ToLower(s), strings.ToLower(val)) {
 				m.filtered = append(m.filtered, s)
 			}
+			}
 		}
 	}
-}
 
 // --- Initial Model ---
 
-func initialModel() model {
+func initialModel(webInfo WebServerInfo, st *SharedTimer) model {
 	cfg, onboarding := timedata.LoadConfig()
 	s := textinput.New()
 	s.Placeholder = "Start Time (HH:MM or blank for now)"
@@ -217,6 +230,8 @@ func initialModel() model {
 		suggestionIndex: -1,
 		config:          cfg,
 		selectedDate:    time.Now(),
+		webInfo:         webInfo,
+		sharedTimer:     st,
 	}
 	if onboarding {
 		m.view = viewOnboarding
@@ -228,7 +243,7 @@ func initialModel() model {
 }
 
 func (m model) Init() tea.Cmd {
-	return tea.Batch(textinput.Blink, tea.ClearScreen)
+	return tea.Batch(textinput.Blink, tick(), tea.ClearScreen)
 }
 
 // --- Update ---
@@ -240,6 +255,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	switch msg := msg.(type) {
+	case tickMsg:
+		if m.sharedTimer.IsRunning() && m.view != viewTimer && m.state != stateSettings && m.state != stateChangeTask {
+			_, _, _, comment := m.sharedTimer.GetStatus()
+			m.commentInput.SetValue(comment)
+			m.view = viewTimer
+			m.state = stateTracking
+		}
+		if !m.sharedTimer.IsRunning() && m.view == viewTimer && m.state == stateTracking {
+			m.view = viewSetup
+			m.startTimeInput.SetValue("")
+			m.endTimeInput.SetValue("")
+			m.commentInput.SetValue("")
+			m.focusIndex = 0
+			m.updateFocus()
+		}
+		return m, tick()
 	case tea.WindowSizeMsg:
 		m.termWidth = msg.Width
 		m.termHeight = msg.Height
@@ -262,6 +293,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case clearToastMsg:
 		m.toastMsg = ""
+		return m, nil
+	case todayTotalMsg:
+		m.todayLogged = time.Duration(msg)
 		return m, nil
 	}
 
@@ -316,6 +350,11 @@ func (m model) updateOnboarding(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) updateSetup(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.sharedTimer.IsRunning() {
+		m.view = viewTimer
+		m.state = stateTracking
+		return m, m.loadTodayLogged()
+	}
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -455,10 +494,19 @@ func (m model) updateSetup(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.confirmNegative = true
 				return m, nil
 			}
+			if valEnd == "" {
+				comment := m.commentInput.Value()
+				if comment == "" {
+					comment = "work"
+				}
+				m.sharedTimer.Start(comment)
+				m.updateRecentComments(comment)
+				m.commentInput.SetValue(comment)
+			}
 			m.view = viewTimer
 			m.state = stateTracking
 			m.confirmNegative = false
-			return m, tick()
+			return m, tea.Batch(tick(), m.loadTodayLogged())
 		}
 	}
 	switch m.focusIndex {
@@ -513,11 +561,6 @@ func (m model) updateTimer(msg tea.Msg) (tea.Model, tea.Cmd) {
 				break
 			}
 			m.state = stateChangeTask
-			if m.isPaused {
-				m.endTime = m.pauseStart
-			} else {
-				m.endTime = time.Now()
-			}
 			m.changeTaskInput.SetValue("")
 			m.originalComment = ""
 			m.changeTaskInput.Focus()
@@ -559,32 +602,25 @@ func (m model) updateTimer(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.state != stateTracking {
 				break
 			}
-			if !m.isPaused {
-				m.isPaused = true
-				m.pauseStart = time.Now()
-			} else {
-				m.isPaused = false
-				m.pausedDuration += time.Since(m.pauseStart)
-				return m, tick()
-			}
+			m.sharedTimer.TogglePause()
+			return m, tick()
 		case "s":
 			if m.state != stateTracking {
 				break
 			}
-			m.endTime = time.Now()
-			if m.isPaused {
-				m.pausedDuration += time.Since(m.pauseStart)
+			startTime, endTime, pausedDur, comment, ok := m.sharedTimer.StopAndLog()
+			if !ok {
+				break
 			}
-			m.logToFile()
+			timedata.LogTimeEntry(startTime, endTime, pausedDur, comment)
+			m.updateRecentComments(comment)
 			m.view = viewSetup
 			m.startTimeInput.SetValue("")
 			m.endTimeInput.SetValue("")
 			m.commentInput.SetValue("")
 			m.focusIndex = 0
-			m.isPaused = false
-			m.pausedDuration = 0
 			m.updateFocus()
-			return m, nil
+			return m, m.loadTodayLogged()
 		case "enter":
 			if m.state == stateChangeTask {
 				newComment := m.changeTaskInput.Value()
@@ -592,21 +628,16 @@ func (m model) updateTimer(msg tea.Msg) (tea.Model, tea.Cmd) {
 					newComment = "work"
 				}
 
-				m.logToFile()
-
+				startTime, endTime, oldComment, wasRunning := m.sharedTimer.SwitchTask(newComment)
+				if wasRunning {
+					timedata.LogTimeEntry(startTime, endTime, 0, oldComment)
+					m.updateRecentComments(oldComment)
+				}
 				m.updateRecentComments(newComment)
-
-				m.startTime = m.endTime
-				m.pausedDuration = 0
-				m.isPaused = false
 				m.commentInput.SetValue(newComment)
 				m.state = stateTracking
-				return m, tick()
+				return m, tea.Batch(tick(), m.loadTodayLogged())
 			}
-		}
-	case tickMsg:
-		if !m.isPaused {
-			return m, tick()
 		}
 	}
 	if m.state == stateChangeTask {
@@ -642,28 +673,57 @@ func (m model) updateReports(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "down", "j":
 			m.repCursor++
 		case "left", "h":
-			m.repPage++
+			if m.repPage < m.maxReportPages()-1 {
+				m.repPage++
+			}
 		case "right", "l":
 			if m.repPage > 0 {
 				m.repPage--
 			}
-		case ",":
+		case ",", "g":
 			m.view = viewSettings
 			m.state = stateSettings
 			m.toastMsg = "fromReports"
 			return m, nil
+		case "s":
+			m.reportSortMode = (m.reportSortMode + 1) % 3
 		}
 	}
 	return m, nil
 }
 
+func (m model) maxReportPages() int {
+	mp := 1
+	if m.config.ShowDaily && len(m.reportData.dailyKeys) > 0 {
+		p := (len(m.reportData.dailyKeys) + dailyWindow - 1) / dailyWindow
+		if p > mp {
+			mp = p
+		}
+	}
+	if m.config.ShowWeekly && len(m.reportData.weeklyKeys) > 0 {
+		p := (len(m.reportData.weeklyKeys) + weeklyWindow - 1) / weeklyWindow
+		if p > mp {
+			mp = p
+		}
+	}
+	if m.config.ShowMonthly && len(m.reportData.monthlyKeys) > 0 {
+		p := (len(m.reportData.monthlyKeys) + monthlyWindow - 1) / monthlyWindow
+		if p > mp {
+			mp = p
+		}
+	}
+	if m.config.ShowYearly && len(m.reportData.yearlyKeys) > 0 {
+		p := (len(m.reportData.yearlyKeys) + yearlyWindow - 1) / yearlyWindow
+		if p > mp {
+			mp = p
+		}
+	}
+	return mp
+}
+
 func (m model) updateSettings(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
-	case tickMsg:
-		if !m.isPaused {
-			return m, tick()
-		}
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
@@ -785,9 +845,10 @@ func (m model) updateSettings(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 			}
+		case "w":
+			m.showWebInfo = !m.showWebInfo
 		}
 	}
-
 	if m.isEditing {
 		m.editInput, cmd = m.editInput.Update(msg)
 		return m, cmd
@@ -1107,7 +1168,7 @@ func (m model) viewOnboarding() string {
 func (m model) viewSetup() string {
 	var s strings.Builder
 	titleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Bold(true)
-	s.WriteString(titleStyle.Render("tuitime") + " " + lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render("v1.1.0") + "\n\n")
+	s.WriteString(titleStyle.Render("tuitime") + " " + lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render("v1.2.0") + "\n\n")
 
 	// Menu
 	for i, item := range menuItems {
@@ -1178,15 +1239,17 @@ func (m model) viewTimer() string {
 		s.WriteString("\n(enter) confirm  (esc) cancel")
 		return lipgloss.NewStyle().Padding(1, 2).Render(s.String())
 	}
-	elapsed := time.Since(m.startTime) - m.pausedDuration
-	if m.isPaused {
-		elapsed = m.pauseStart.Sub(m.startTime) - m.pausedDuration
+	running, paused, elapsed, comment := m.sharedTimer.GetStatus()
+	if !running {
+		m.state = stateSetup
+		m.view = viewSetup
+		return m.viewSetup()
 	}
 	status := lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render("RUNNING")
-	if m.isPaused {
+	if paused {
 		status = lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Render("PAUSED")
 	}
-	displayComment := m.commentInput.Value()
+	displayComment := comment
 	if displayComment == "" {
 		displayComment = "work"
 	}
@@ -1197,6 +1260,12 @@ func (m model) viewTimer() string {
 	clockStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(m.config.ClockColor)).Bold(true)
 	clock := clockStyle.Render(renderClock(timeStr, m.config.ClockMode))
 	s := fmt.Sprintf("Activity: %s\nStatus: %s\n\n%s\n\n(p)ause  (s)top  (t)ask  (,) settings", displayComment, status, clock)
+	totalToday := m.todayLogged + elapsed
+	if totalToday > 0 {
+		h := int(totalToday.Hours())
+		m := int(totalToday.Minutes()) % 60
+		s += fmt.Sprintf("\n\nToday: %dh %dm", h, m)
+	}
 	return lipgloss.NewStyle().Padding(1, 2).Render(s)
 }
 
@@ -1216,19 +1285,24 @@ func (m model) viewReports() string {
 	renderSection := func(sectionTitle string, target time.Duration, keys []string, data map[string]map[string]time.Duration, windowSize int) {
 		s.WriteString(lipgloss.NewStyle().Underline(true).Render(sectionTitle) + "\n")
 
-		start := m.repPage * windowSize
-		end := start + windowSize
-		if start >= len(keys) {
-			start = 0
-		}
-		if end > len(keys) {
-			end = len(keys)
-		}
-		visibleKeys := keys[start:end]
 		totalPages := 1
 		if len(keys) > 0 {
 			totalPages = (len(keys) + windowSize - 1) / windowSize
 		}
+		effPage := m.repPage
+		if effPage >= totalPages {
+			effPage = totalPages - 1
+		}
+		if effPage < 0 {
+			effPage = 0
+		}
+
+		start := effPage * windowSize
+		end := start + windowSize
+		if end > len(keys) {
+			end = len(keys)
+		}
+		visibleKeys := keys[start:end]
 
 		for _, k := range visibleKeys {
 			total := time.Duration(0)
@@ -1238,31 +1312,63 @@ func (m model) viewReports() string {
 				comments = append(comments, c)
 				total += data[k][c]
 			}
-			sort.Strings(comments)
+			switch m.reportSortMode {
+			case 0: // alpha
+				sort.Strings(comments)
+			case 1: // hours desc
+				sort.Slice(comments, func(i, j int) bool {
+					return data[k][comments[i]] > data[k][comments[j]]
+				})
+			case 2: // recently used
+				recent := timedata.GetRecentComments()
+				idx := make(map[string]int)
+				for i, c := range recent {
+					idx[c] = i
+				}
+				sort.Slice(comments, func(i, j int) bool {
+					ii, oki := idx[comments[i]]
+					ij, okj := idx[comments[j]]
+					if !oki && !okj {
+						return comments[i] < comments[j]
+					}
+					if !oki {
+						return false
+					}
+					if !okj {
+						return true
+					}
+					return ii < ij
+				})
+			}
+
+			displayKey := k
+			if weekRange := timedata.WeekKeyToRange(k); weekRange != "" {
+				displayKey = k + " " + weekRange
+			}
 
 			if !m.config.NoGoal {
 				bar := renderProgressBar(total, target, 20)
 				targetHours := float64(target) / float64(time.Hour)
-				keyStyle := lipgloss.NewStyle().Width(14)
+				keyStyle := lipgloss.NewStyle().Width(28)
 				timeStyle := lipgloss.NewStyle().Width(12).Align(lipgloss.Right)
 				targetStyle := lipgloss.NewStyle().Width(8).Align(lipgloss.Right)
 
 				line := fmt.Sprintf("%s: %s of %s %s",
-					keyStyle.Render(k),
+					keyStyle.Render(displayKey),
 					timeStyle.Render(total.Round(time.Minute).String()),
 					targetStyle.Render(fmt.Sprintf("%.1fh", targetHours)),
 					bar)
 				s.WriteString(line + "\n")
 			} else {
-				keyStyle := lipgloss.NewStyle().Width(14)
-				s.WriteString(fmt.Sprintf("%s: %s\n", keyStyle.Render(k), total.Round(time.Minute)))
+				keyStyle := lipgloss.NewStyle().Width(28)
+				s.WriteString(fmt.Sprintf("%s: %s\n", keyStyle.Render(displayKey), total.Round(time.Minute)))
 			}
 			for _, comment := range comments {
 				dur := data[k][comment]
 				s.WriteString(fmt.Sprintf("  - %s: %s\n", comment, dur.Round(time.Minute)))
 			}
 		}
-		s.WriteString(fmt.Sprintf("  ← page %d/%d →\n", m.repPage+1, totalPages))
+		s.WriteString(fmt.Sprintf("  ← page %d/%d →\n", effPage+1, totalPages))
 		s.WriteString("\n")
 	}
 
@@ -1279,7 +1385,7 @@ func (m model) viewReports() string {
 		renderSection("YEARLY TOTALS", yearlyTarget, m.reportData.yearlyKeys, m.reportData.yearly, yearlyWindow)
 	}
 
-	s.WriteString("\n(←/→) navigate pages  (up/down) scroll  (esc) back")
+	s.WriteString("\n(←/→) navigate pages  (up/down) scroll  (s) sort  (g) settings  (esc) back")
 
 	lines := strings.Split(s.String(), "\n")
 
@@ -1351,6 +1457,25 @@ func (m model) viewSettings() string {
 		}
 		s += fmt.Sprintf("(m) Clock Mode:  %s\n", modeName)
 		s += fmt.Sprintf("(c) Clock Color: %s\n", lipgloss.NewStyle().Foreground(lipgloss.Color(m.config.ClockColor)).Render("██████"))
+	}
+
+	if m.webInfo.Running {
+		if m.showWebInfo {
+			s += "\n--- Web Server ---\n"
+			s += fmt.Sprintf("Port:     %d\n", m.webInfo.Port)
+			s += fmt.Sprintf("Local:    %s\n", m.webInfo.LocalURL)
+			for _, u := range m.webInfo.LanIPs {
+				s += fmt.Sprintf("LAN:      %s\n", u)
+			}
+			for _, u := range m.webInfo.TailscaleIPs {
+				s += fmt.Sprintf("Tailscale: %s\n", u)
+			}
+			s += "(w) hide\n"
+		} else {
+			s += fmt.Sprintf("\n(w) Web: %s\n", m.webInfo.LocalURL)
+		}
+	} else {
+		s += "\nWeb server: offline\n"
 	}
 
 	s += "\n(esc) back"
@@ -1427,6 +1552,12 @@ func (m model) viewDay() string {
 			durStr := e.Duration.Round(time.Second).String()
 			s.WriteString(style.Render(fmt.Sprintf("%s - %s | %s | %s", startStr, endStr, durStr, commStr)) + "\n")
 		}
+
+		var dayTotal time.Duration
+		for _, e := range m.dayEntries {
+			dayTotal += e.Duration
+		}
+		s.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Render(fmt.Sprintf("\nTotal: %s", dayTotal.Round(time.Second))) + "\n")
 	}
 	if m.err != nil {
 		s.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render(fmt.Sprintf("\nError: %v", m.err)))
@@ -1475,6 +1606,20 @@ func (m model) loadDayEntries() tea.Cmd {
 			return err
 		}
 		return entries
+	}
+}
+
+func (m model) loadTodayLogged() tea.Cmd {
+	return func() tea.Msg {
+		entries, err := timedata.LoadDayEntries(time.Now())
+		if err != nil {
+			return todayTotalMsg(0)
+		}
+		var total time.Duration
+		for _, e := range entries {
+			total += e.Duration
+		}
+		return todayTotalMsg(total)
 	}
 }
 
@@ -1533,16 +1678,86 @@ func renderClock(t string, mode timedata.ClockMode) string {
 }
 
 func main() {
-	for _, arg := range os.Args[1:] {
+	cleanup, err := timedata.AcquireLock()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+	defer cleanup()
+
+	port := 9999
+	webOnly := false
+	for i, arg := range os.Args[1:] {
 		if arg == "--web" {
-			startWebServer()
-			return
+			webOnly = true
+		}
+		if arg == "--help" || arg == "-h" {
+			fmt.Println("tuitime — Terminal time tracker with web UI")
+			fmt.Println()
+			fmt.Println("Usage:")
+			fmt.Println("  tuitime                    Start TUI + web server (default port 9999)")
+			fmt.Println("  tuitime --web              Headless web server only")
+			fmt.Println("  tuitime --port <num>       Use custom port (default 9999)")
+			fmt.Println("  tuitime --web --port 9090  Headless with custom port")
+			fmt.Println("  tuitime --help             Show this help")
+			fmt.Println()
+			fmt.Println("When running normally, the TUI and web server both start.")
+			fmt.Println("Access the web UI at http://localhost:<port>")
+			fmt.Println("From the TUI, press 'w' in Settings to see web URLs.")
+			cleanup()
+			os.Exit(0)
+		}
+		if arg == "--port" && i+2 < len(os.Args) {
+			if p, perr := strconv.Atoi(os.Args[i+2]); perr == nil {
+				port = p
+			}
+		}
+		if strings.HasPrefix(arg, "--port=") {
+			if p, perr := strconv.Atoi(strings.TrimPrefix(arg, "--port=")); perr == nil {
+				port = p
+			}
 		}
 	}
 
-	p := tea.NewProgram(initialModel())
-	if _, err := p.Run(); err != nil {
-		fmt.Printf("Error: %v", err)
+	webInfo, webShutdown, webErr := StartWebServer(port)
+	if webErr != nil {
+		webInfo.Running = false
+		fmt.Fprintf(os.Stderr, "Web server: %v\n", webErr)
+		fmt.Fprintf(os.Stderr, "Tip: use --port to choose a different port.\n")
+	}
+	defer func() {
+		if webShutdown != nil {
+			webShutdown()
+		}
+	}()
+
+	if webOnly {
+		if !webInfo.Running {
+			cleanup()
+			os.Exit(1)
+		}
+		fmt.Printf("\n  tuitime web UI\n")
+		fmt.Printf("  ─────────────────\n")
+		fmt.Printf("  Local:   %s\n", webInfo.LocalURL)
+		for _, u := range webInfo.LanIPs {
+			fmt.Printf("  LAN:     %s\n", u)
+		}
+		for _, u := range webInfo.TailscaleIPs {
+			fmt.Printf("  Tailscale: %s\n", u)
+		}
+		fmt.Printf("\n  Open this URL on your phone or tablet.\n")
+		fmt.Printf("  Press Ctrl+C to stop.\n\n")
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		<-sigCh
+		return
+	}
+
+	m := initialModel(webInfo, &sharedTimer)
+	p := tea.NewProgram(m)
+	if _, runErr := p.Run(); runErr != nil {
+		fmt.Printf("Error: %v", runErr)
+		cleanup()
 		os.Exit(1)
 	}
 }

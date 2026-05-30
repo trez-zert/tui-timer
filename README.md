@@ -69,20 +69,21 @@ See [CHANGELOG.md](./CHANGELOG.md) for a full history of changes.
 | **Windows** | `arm64` | Windows on ARM devices |
 | **FreeBSD** | `amd64` | Servers |
 
-### Running (TUI)
-1. **Launch Hub:** Run `tuitime`.
+### Running (TUI + Web UI)
+1. **Launch:** Run `tuitime`. Both the terminal UI and web server (port 9999) start simultaneously.
 2. **Navigate:** Use **Arrow Keys (Up/Down)** to move between the top menu and the input fields.
 3. **Select View:** Use **Left/Right** on the top menu to select a tool and press **Enter**.
 4. **Exit:** Press **q** or **Esc** while the top menu is focused to quit.
+5. **Web Info:** Press `w` in the Settings screen to view web server URLs for mobile access.
+6. **Timer Sync:** Start a timer from the web UI and it appears in the TUI within a second, and vice versa.
 
-### Running (Web UI)
-1. Run `tuitime --web` to start the HTTP server.
+### Running (Headless Web Server)
+1. Run `tuitime --web` to start the HTTP server without the TUI.
 2. Open the displayed URL in your phone's browser.
-3. The web UI lists LAN and Tailscale IPs automatically for easy mobile access.
 
 ```bash
-./tuitime --web              # default port 8080
-./tuitime --web --port 9090  # custom port
+./tuitime --web              # headless, default port 9999
+./tuitime --web --port 9090  # headless, custom port
 ```
 
 ### Controls (TUI)
@@ -91,6 +92,7 @@ See [CHANGELOG.md](./CHANGELOG.md) for a full history of changes.
     - **t** - Switch tasks (logs current and starts new).
     - **s** - Stop and log.
     - **,** - Change clock settings.
+    - **w** - Toggle web server info (in Settings view).
 - **Day View:** 
     - **Arrows** - Navigate entries and days (navigate to header to change day).
     - **Enter** - Edit field in-place.
@@ -98,9 +100,12 @@ See [CHANGELOG.md](./CHANGELOG.md) for a full history of changes.
     - **del** - Delete entry.
     - **u** - Undo current session changes.
 - **Reports:**
-    - **Arrows** - Scroll through long reports.
-    - **PgUp/PgDown** - Fast scroll.
+    - **←/→** - Navigate pages.
+    - **s** - Cycle sort mode (alpha / hours / recent).
+    - **up/down** - Scroll within the current page.
     - **,** - Change target and visibility settings.
+- **Settings:**
+    - **w** - Toggle web server info (URLs for mobile access).
 
 ---
 

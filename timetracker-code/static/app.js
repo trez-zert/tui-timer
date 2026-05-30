@@ -8,6 +8,7 @@ let state = {
   addFormVisible: false,
   editingEntry: null,
   taskInputVisible: false,
+  todayLoggedSec: 0,
 };
 
 // --- API ---
@@ -127,6 +128,13 @@ async function updateTimerDisplay() {
     timerStatus.textContent = res.paused ? 'PAUSED' : 'RUNNING';
     timerStatus.className = 'timer-status ' + (res.paused ? 'paused' : 'running');
     state.timerPaused = res.paused;
+
+    const totalSec = state.todayLoggedSec + elapsed;
+    const th = Math.floor(totalSec / 3600);
+    const tm = Math.floor((totalSec % 3600) / 60);
+    const todayEl = document.getElementById('today-total');
+    if (totalSec > 0) todayEl.textContent = 'Today: ' + th + 'h ' + tm + 'm';
+    else todayEl.textContent = '';
   } catch {}
 }
 
@@ -135,6 +143,24 @@ function stopTimerTick() {
     clearInterval(state.timerInterval);
     state.timerInterval = null;
   }
+}
+
+async function loadTodayTotal() {
+  try {
+    const dateStr = formatDate(new Date());
+    const entries = await api.get(`/api/logs?date=${dateStr}`);
+    let sec = 0;
+    entries.forEach(e => { sec += parseDuration(e.duration); });
+    state.todayLoggedSec = sec;
+    const todayEl = document.getElementById('today-total');
+    if (!state.timerRunning && sec > 0) {
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      todayEl.textContent = 'Today: ' + h + 'h ' + m + 'm';
+    } else if (!state.timerRunning) {
+      todayEl.textContent = '';
+    }
+  } catch {}
 }
 
 async function togglePause() {
@@ -157,6 +183,7 @@ async function stopTimer() {
     timerComment.textContent = '';
     document.getElementById('timer-controls-start').classList.remove('hidden');
     document.getElementById('timer-controls-running').classList.add('hidden');
+    loadTodayTotal();
     toast('Time logged!');
   } catch (e) {
     toast('Failed to stop: ' + e.message, true);
@@ -269,14 +296,17 @@ function toggleAddForm() {
   }
 }
 
+document.getElementById('add-start').addEventListener('input', autoFormatTime);
+document.getElementById('add-end').addEventListener('input', autoFormatTime);
+
 async function saveAddEntry() {
-  const start = document.getElementById('add-start').value;
-  const end = document.getElementById('add-end').value;
+  const start = normalizeTime(document.getElementById('add-start').value);
+  const end = normalizeTime(document.getElementById('add-end').value);
   const comment = document.getElementById('add-comment').value || 'work';
 
   if (!end) { toast('End time required', true); return; }
-  if (!/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end)) {
-    toast('Use HH:MM format', true);
+  if (!isHHMM(start) || !isHHMM(end)) {
+    toast('Use HH:MM or HHMM format', true);
     return;
   }
 
@@ -336,7 +366,9 @@ function renderDayEntries(entries, dateStr) {
   }
 
   container.innerHTML = '';
+  let totalSec = 0;
   entries.forEach((entry, idx) => {
+    totalSec += parseDuration(entry.duration);
     const row = document.createElement('div');
     row.className = 'entry-row';
 
@@ -378,6 +410,15 @@ function renderDayEntries(entries, dateStr) {
     row.appendChild(actions);
     container.appendChild(row);
   });
+
+  if (totalSec > 0) {
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const totalRow = document.createElement('div');
+    totalRow.className = 'day-total';
+    totalRow.textContent = 'Total: ' + (h > 0 ? h + 'h ' : '') + m + 'm';
+    container.appendChild(totalRow);
+  }
 }
 
 function openEditModal(entry, idx, dateStr) {
@@ -404,14 +445,17 @@ function openEditModal(entry, idx, dateStr) {
     });
   });
 
+  document.getElementById('edit-start').addEventListener('input', autoFormatTime);
+  document.getElementById('edit-end').addEventListener('input', autoFormatTime);
+
   document.getElementById('edit-cancel').addEventListener('click', () => overlay.remove());
   document.getElementById('edit-save').addEventListener('click', async () => {
-    const start = document.getElementById('edit-start').value;
-    const end = document.getElementById('edit-end').value;
+    const start = normalizeTime(document.getElementById('edit-start').value);
+    const end = normalizeTime(document.getElementById('edit-end').value);
     const comment = document.getElementById('edit-comment').value || 'work';
 
-    if (!/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end)) {
-      toast('Use HH:MM format', true);
+    if (!isHHMM(start) || !isHHMM(end)) {
+      toast('Use HH:MM or HHMM format', true);
       return;
     }
 
@@ -463,6 +507,7 @@ async function deleteEntry(idx, dateStr) {
 
 const reportWindows = { daily: 5, weekly: 5, monthly: 12, yearly: 10 };
 const reportOffsets = { daily: 0, weekly: 0, monthly: 0, yearly: 0 };
+let reportSortMode = 0; // 0=alpha, 1=hours desc, 2=recent
 
 async function refreshReports() {
   const container = document.getElementById('reports-content');
@@ -504,7 +549,14 @@ async function refreshReports() {
 
       const header = document.createElement('div');
       header.className = 'report-header';
-      header.innerHTML = `${s.label} <span class="toggle-icon">&#9660;</span>`;
+      header.innerHTML = `${s.label} <span style="display:flex;align-items:center;gap:8px"><button class="btn-sort-report" title="Toggle sort: alpha / by hours / recent">&#8645;</button><span class="toggle-icon">&#9660;</span></span>`;
+
+      const sortBtn = header.querySelector('.btn-sort-report');
+      sortBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        reportSortMode = (reportSortMode + 1) % 3;
+        renderAllSections();
+      });
 
       const body = document.createElement('div');
       body.className = 'report-body';
@@ -515,7 +567,8 @@ async function refreshReports() {
 
         const itemHeader = document.createElement('div');
         itemHeader.className = 'report-item-header';
-        itemHeader.innerHTML = `<span class="report-key">${item.key}</span><span class="report-total">${item.total}</span>`;
+        const keyDisplay = item.week_range ? `${item.key} ${item.week_range}` : item.key;
+        itemHeader.innerHTML = `<span class="report-key">${keyDisplay}</span><span class="report-total">${item.total}</span>`;
         div.appendChild(itemHeader);
 
         if (!cfg.no_goal && s.target > 0) {
@@ -532,7 +585,16 @@ async function refreshReports() {
 
         const comments = document.createElement('div');
         comments.className = 'report-comments';
-        Object.entries(item.comments).forEach(([c, d]) => {
+        const entries = Object.entries(item.comments);
+        if (reportSortMode === 0) {
+          entries.sort((a, b) => a[0].localeCompare(b[0]));
+        } else if (reportSortMode === 1) {
+          entries.sort((a, b) => {
+            const ta = parseDuration(a[1]), tb = parseDuration(b[1]);
+            return tb - ta;
+          });
+        }
+        entries.forEach(([c, d]) => {
           const chip = document.createElement('span');
           chip.className = 'report-comment';
           chip.textContent = `${c}: ${d}`;
@@ -658,9 +720,39 @@ function formatDate(d) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+function autoFormatTime(e) {
+  const input = e.target;
+  let val = input.value.replace(/[^0-9]/g, '');
+  if (val.length > 4) val = val.slice(0, 4);
+  if (val.length >= 3) {
+    input.value = val.slice(0, 2) + ':' + val.slice(2);
+  } else if (val.length >= 2) {
+    input.value = val.slice(0, 2) + ':' + val.slice(2);
+  } else {
+    input.value = val;
+  }
+}
+
+function isHHMM(val) {
+  return /^(\d{2}:\d{2}|\d{4})$/.test(val);
+}
+
+function normalizeTime(val) {
+  if (!val) return val;
+  if (/^\d{4}$/.test(val)) return val.slice(0, 2) + ':' + val.slice(2);
+  return val;
+}
+
+function parseDuration(d) {
+  if (!d) return 0;
+  const h = d.match(/(\d+)h/), m = d.match(/(\d+)m/), s = d.match(/(\d+)s/);
+  return (h ? +h[1] * 3600 : 0) + (m ? +m[1] * 60 : 0) + (s ? +s[1] : 0);
+}
+
 // --- Init ---
 // Check for running timer on page load
 (async function() {
+  loadTodayTotal();
   try {
     const status = await api.get('/api/timer/status');
     if (status.running) {

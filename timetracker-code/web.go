@@ -7,8 +7,6 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
-	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,7 +17,7 @@ import (
 //go:embed static/*
 var staticFiles embed.FS
 
-type webTimerState struct {
+type SharedTimer struct {
 	mu             sync.Mutex
 	running        bool
 	startTime      time.Time
@@ -29,23 +27,109 @@ type webTimerState struct {
 	pauseStart     time.Time
 }
 
-var webTimer webTimerState
+var sharedTimer SharedTimer
 
-func startWebServer() {
-	port := 8080
-	for i, arg := range os.Args[1:] {
-		if arg == "--port" && i+2 < len(os.Args) {
-			if p, err := strconv.Atoi(os.Args[i+2]); err == nil {
-				port = p
-			}
-		}
-		parts := strings.SplitN(arg, "=", 2)
-		if parts[0] == "--port" && len(parts) == 2 {
-			if p, err := strconv.Atoi(parts[1]); err == nil {
-				port = p
-			}
-		}
+func (st *SharedTimer) IsRunning() bool {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	return st.running
+}
+
+func (st *SharedTimer) GetStatus() (running, paused bool, elapsed time.Duration, comment string) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if !st.running {
+		return false, false, 0, ""
 	}
+	if st.paused {
+		elapsed = st.pauseStart.Sub(st.startTime) - st.pausedDuration
+	} else {
+		elapsed = time.Since(st.startTime) - st.pausedDuration
+	}
+	return true, st.paused, elapsed, st.comment
+}
+
+func (st *SharedTimer) Start(comment string) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	st.running = true
+	st.startTime = time.Now()
+	st.comment = comment
+	st.paused = false
+	st.pausedDuration = 0
+	st.pauseStart = time.Time{}
+}
+
+func (st *SharedTimer) TogglePause() {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if !st.running {
+		return
+	}
+	if !st.paused {
+		st.paused = true
+		st.pauseStart = time.Now()
+	} else {
+		st.paused = false
+		st.pausedDuration += time.Since(st.pauseStart)
+	}
+}
+
+func (st *SharedTimer) StopAndLog() (startTime, endTime time.Time, pausedDuration time.Duration, comment string, ok bool) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if !st.running {
+		return time.Time{}, time.Time{}, 0, "", false
+	}
+	endTime = time.Now()
+	if st.paused {
+		st.pausedDuration += time.Since(st.pauseStart)
+	}
+	startTime = st.startTime
+	pausedDuration = st.pausedDuration
+	comment = st.comment
+	st.running = false
+	st.paused = false
+	st.pausedDuration = 0
+	return startTime, endTime, pausedDuration, comment, true
+}
+
+func (st *SharedTimer) SwitchTask(newComment string) (startTime, endTime time.Time, oldComment string, ok bool) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if !st.running {
+		st.running = true
+		st.startTime = time.Now()
+		st.comment = newComment
+		st.paused = false
+		st.pausedDuration = 0
+		st.pauseStart = time.Time{}
+		return time.Time{}, time.Time{}, "", false
+	}
+	endTime = time.Now()
+	if st.paused {
+		st.pausedDuration += time.Since(st.pauseStart)
+	}
+	startTime = st.startTime
+	oldComment = st.comment
+	st.startTime = endTime
+	st.comment = newComment
+	st.paused = false
+	st.pausedDuration = 0
+	st.pauseStart = time.Time{}
+	return startTime, endTime, oldComment, true
+}
+
+type WebServerInfo struct {
+	Running     bool
+	Port        int
+	LocalURL    string
+	LanIPs      []string
+	TailscaleIPs []string
+}
+
+func StartWebServer(port int) (WebServerInfo, func(), error) {
+	info := WebServerInfo{Port: port}
 
 	mux := http.NewServeMux()
 
@@ -61,8 +145,7 @@ func startWebServer() {
 
 	sub, err := fs.Sub(staticFiles, "static")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error embedding static files: %v\n", err)
-		os.Exit(1)
+		return info, nil, fmt.Errorf("embedding static files: %v", err)
 	}
 	fileServer := http.FileServer(http.FS(sub))
 	mux.Handle("/", fileServer)
@@ -73,29 +156,28 @@ func startWebServer() {
 		addr = fmt.Sprintf("localhost:%d", port)
 		listener, err = net.Listen("tcp", addr)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error starting server: %v\n", err)
-			os.Exit(1)
+			return info, nil, fmt.Errorf("cannot bind port %d: %v", port, err)
 		}
 	}
 
-	fmt.Printf("\n  tuitime web UI\n")
-	fmt.Printf("  ─────────────────\n")
-	fmt.Printf("  Local:   http://localhost:%d\n", port)
+	info.Running = true
+	info.LocalURL = fmt.Sprintf("http://localhost:%d", port)
 
 	addrs := localIPs()
 	for _, ip := range addrs.lan {
-		fmt.Printf("  LAN:     http://%s:%d\n", ip, port)
+		info.LanIPs = append(info.LanIPs, fmt.Sprintf("http://%s:%d", ip, port))
 	}
 	for _, ip := range addrs.tailscale {
-		fmt.Printf("  Tailscale: http://%s:%d\n", ip, port)
+		info.TailscaleIPs = append(info.TailscaleIPs, fmt.Sprintf("http://%s:%d", ip, port))
 	}
-	fmt.Printf("\n  Open this URL on your phone or tablet.\n")
-	fmt.Printf("  Press Ctrl+C to stop.\n\n")
 
-	if err := http.Serve(listener, mux); err != nil {
-		fmt.Fprintf(os.Stderr, "Server error: %v\n", err)
-		os.Exit(1)
-	}
+	shutdown := func() { listener.Close() }
+
+	go func() {
+		http.Serve(listener, mux)
+	}()
+
+	return info, shutdown, nil
 }
 
 type ipList struct {
@@ -229,46 +311,29 @@ func handleTimerStart(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewDecoder(r.Body).Decode(&body)
 
-	webTimer.mu.Lock()
-	defer webTimer.mu.Unlock()
-
-	webTimer.running = true
-	webTimer.startTime = time.Now()
-	webTimer.comment = body.Comment
-	webTimer.paused = false
-	webTimer.pausedDuration = 0
-	webTimer.pauseStart = time.Time{}
+	sharedTimer.Start(body.Comment)
 
 	jsonResponse(w, map[string]interface{}{
-		"status":     "started",
-		"start_time": webTimer.startTime,
-		"comment":    webTimer.comment,
+		"status":  "started",
+		"comment": body.Comment,
 	})
 }
 
 func handleTimerStatus(w http.ResponseWriter, r *http.Request) {
-	webTimer.mu.Lock()
-	defer webTimer.mu.Unlock()
-
-	if !webTimer.running {
+	running, paused, elapsed, comment := sharedTimer.GetStatus()
+	if !running {
 		jsonResponse(w, map[string]interface{}{
 			"running": false,
 		})
 		return
 	}
 
-	elapsed := time.Since(webTimer.startTime) - webTimer.pausedDuration
-	if webTimer.paused {
-		elapsed = webTimer.pauseStart.Sub(webTimer.startTime) - webTimer.pausedDuration
-	}
-
 	jsonResponse(w, map[string]interface{}{
-		"running":  true,
-		"paused":   webTimer.paused,
-		"elapsed":  elapsed.String(),
+		"running":    true,
+		"paused":     paused,
+		"elapsed":    elapsed.String(),
 		"elapsed_ns": elapsed.Nanoseconds(),
-		"start_time": webTimer.startTime,
-		"comment":    webTimer.comment,
+		"comment":    comment,
 	})
 }
 
@@ -277,19 +342,10 @@ func handleTimerPause(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "method not allowed", 405)
 		return
 	}
-	webTimer.mu.Lock()
-	defer webTimer.mu.Unlock()
-
-	if !webTimer.paused {
-		webTimer.paused = true
-		webTimer.pauseStart = time.Now()
-	} else {
-		webTimer.paused = false
-		webTimer.pausedDuration += time.Since(webTimer.pauseStart)
-	}
-
+	sharedTimer.TogglePause()
+	_, paused, _, _ := sharedTimer.GetStatus()
 	jsonResponse(w, map[string]interface{}{
-		"paused": webTimer.paused,
+		"paused": paused,
 	})
 }
 
@@ -298,27 +354,14 @@ func handleTimerStop(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "method not allowed", 405)
 		return
 	}
-	webTimer.mu.Lock()
-	defer webTimer.mu.Unlock()
-
-	if !webTimer.running {
+	startTime, endTime, pausedDuration, comment, ok := sharedTimer.StopAndLog()
+	if !ok {
 		jsonError(w, "no timer running", 400)
 		return
 	}
-
-	endTime := time.Now()
-	if webTimer.paused {
-		webTimer.pausedDuration += time.Since(webTimer.pauseStart)
-	}
-	comment := webTimer.comment
-	timedata.LogTimeEntry(webTimer.startTime, endTime, webTimer.pausedDuration, comment)
-
+	timedata.LogTimeEntry(startTime, endTime, pausedDuration, comment)
 	existing := timedata.GetRecentComments()
 	timedata.UpdateRecentComments(comment, existing)
-
-	webTimer.running = false
-	webTimer.paused = false
-	webTimer.pausedDuration = 0
 
 	jsonResponse(w, map[string]string{"status": "logged"})
 }
@@ -333,30 +376,16 @@ func handleTimerSwitch(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewDecoder(r.Body).Decode(&body)
 
-	webTimer.mu.Lock()
-	defer webTimer.mu.Unlock()
-
-	if webTimer.running {
-		endTime := time.Now()
-		if webTimer.paused {
-			webTimer.pausedDuration += time.Since(webTimer.pauseStart)
-		}
-		timedata.LogTimeEntry(webTimer.startTime, endTime, webTimer.pausedDuration, webTimer.comment)
+	startTime, endTime, oldComment, wasRunning := sharedTimer.SwitchTask(body.Comment)
+	if wasRunning {
+		timedata.LogTimeEntry(startTime, endTime, 0, oldComment)
 		existing := timedata.GetRecentComments()
-		timedata.UpdateRecentComments(webTimer.comment, existing)
+		timedata.UpdateRecentComments(oldComment, existing)
 	}
-
 	if body.Comment != "" {
 		existing := timedata.GetRecentComments()
 		timedata.UpdateRecentComments(body.Comment, existing)
 	}
-
-	webTimer.startTime = time.Now()
-	webTimer.comment = body.Comment
-	webTimer.paused = false
-	webTimer.pausedDuration = 0
-	webTimer.pauseStart = time.Time{}
-	webTimer.running = true
 
 	jsonResponse(w, map[string]string{"status": "switched"})
 }
@@ -388,7 +417,7 @@ func parseAPITime(date time.Time, timeStr string) time.Time {
 	if timeStr == "" {
 		return time.Time{}
 	}
-	layouts := []string{"15:04:05", "15:04"}
+	layouts := []string{"15:04:05", "15:04", "1504"}
 	for _, layout := range layouts {
 		t, err := time.Parse(layout, timeStr)
 		if err == nil {
@@ -490,10 +519,11 @@ func handleReports(w http.ResponseWriter, r *http.Request) {
 
 	// Format durations for JSON
 	type sectionItem struct {
-		Key      string            `json:"key"`
-		Total    string            `json:"total"`
-		TotalNs  int64             `json:"total_ns"`
-		Comments map[string]string `json:"comments"`
+		Key       string            `json:"key"`
+		Total     string            `json:"total"`
+		TotalNs   int64             `json:"total_ns"`
+		Comments  map[string]string `json:"comments"`
+		WeekRange string            `json:"week_range,omitempty"`
 	}
 
 	var dailyItems, weeklyItems, monthlyItems, yearlyItems []sectionItem
@@ -521,6 +551,10 @@ func handleReports(w http.ResponseWriter, r *http.Request) {
 	weeklyItems = formatSection(data.WeeklyKeys, data.Weekly)
 	monthlyItems = formatSection(data.MonthlyKeys, data.Monthly)
 	yearlyItems = formatSection(data.YearlyKeys, data.Yearly)
+
+	for i := range weeklyItems {
+		weeklyItems[i].WeekRange = timedata.WeekKeyToRange(weeklyItems[i].Key)
+	}
 
 	result := map[string]interface{}{
 		"daily":        dailyItems,

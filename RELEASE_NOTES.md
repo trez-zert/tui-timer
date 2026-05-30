@@ -1,22 +1,28 @@
-# Release Notes - v1.1.0
+# Release Notes - v1.2.0
 
-This release adds a mobile-friendly web UI on top of the existing terminal application. The TUI and web UI share the same data files, so you can switch freely between them.
+This release brings the TUI and web UI together as concurrent interfaces sharing timer state, plus quality-of-life improvements across both.
 
 ## New Features
 
-- **Web UI Mode**: Run `tuitime --web` to start an HTTP server with a touch-optimized interface for phones and tablets. The startup output shows your LAN and Tailscale IPs for easy mobile access.
-- **Timer Screen**: Large Start/Pause/Stop buttons, inline task switching with comment autocomplete suggestions displayed as tappable chips.
-- **Day View**: Swipeable date navigation, tap-to-edit entries, inline comment suggestions, add/delete entry support.
-- **Reports**: Collapsible daily/weekly/monthly/yearly sections with color-coded progress bars and per-comment breakdowns.
-- **Settings**: Toggle report visibility, adjust weekly/yearly/vacation targets, disable goals.
-- **PWA Manifest**: "Add to Home Screen" support for native-app-like experience.
+- **Concurrent TUI + Web UI:** Both now run simultaneously. The web server starts automatically on port 9999 alongside the TUI — no `--web` flag needed. The `--web` flag is still supported for headless/server-only mode.
+- **Shared Timer State:** Start a timer from the web UI and it appears in the TUI within a second, and vice versa. Pause, stop, and task switch are synchronized between both interfaces.
+- **Web Server Info in TUI:** Press `w` in the Settings screen to view web server URLs (local, LAN IPs, Tailscale IPs). Press `w` again to hide details.
+- **Instance Lock:** A lock file prevents running multiple copies of tuitime simultaneously, protecting your log files from corruption. Stale locks (older than 5 minutes) are automatically cleaned up. Lock is properly cleaned on both Ctrl+C and `--help` exit.
+- **Report Sort Toggle:** Press `s` in TUI reports or click the `⇅` button in web reports to cycle through three sort modes: alphabetical, by hours spent (descending), or by most recently used.
+- **Day Total:** Both TUI and web Day View now display a running total of all hours logged for the selected day.
+- **Today's Total on Timer:** The timer screen now shows "Today: Xh Ym" below the clock, combining already-logged entries with the currently running session.
+- **Week Date Range:** Weekly report entries now show the Monday–Sunday date range (e.g. "2026-W22 (May 25-31)") for clarity.
+- **HHMM Time Format:** Time inputs now accept four digits without a colon (e.g. "0900") in addition to "09:00". The web UI automatically inserts a colon as you type.
+- **--help Flag:** Run `tuitime --help` to see usage syntax.
+
+## Fixed
+
+- **Report Page Overflow:** The page number display no longer exceeds the actual number of available pages when navigating reports.
+- **Daily Totals Sort Order:** Now consistently sorted newest-to-oldest across all report sections.
+- **Ctrl+C Cleanup:** The lock file is now reliably removed on Ctrl+C in both TUI and headless web modes.
 
 ## Changed
 
-- **Single Binary**: Both TUI and Web UI are now in a single binary. Run `tuitime` for the terminal app or `tuitime --web` for the web server.
-- **Version Bump**: Application version updated to `v1.1.0`.
-- **Build Command**: Updated to `go build -o tuitime .` to include all Go source files and embedded static assets.
-
-## Distribution
-
-Binaries for all supported platforms are included in this release under the `binaries/` directory.
+- Version bumped to v1.2.0.
+- Default port changed from 8080 to 9999 to avoid conflicts with common services.
+- Default behavior: running `tuitime` now starts both the TUI and web server. Use `tuitime --web` for headless web-only mode.

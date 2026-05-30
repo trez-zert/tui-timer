@@ -91,6 +91,14 @@ html, body {
 .timer-status.running { color: var(--green); }
 .timer-status.paused { color: var(--yellow); }
 
+.today-total {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 1rem;
+  margin-bottom: 20px;
+  min-height: 1.4em;
+}
+
 .timer-controls {
   display: flex;
   flex-direction: column;
@@ -245,6 +253,16 @@ html, body {
   color: var(--text-dim);
 }
 
+.day-total {
+  background: var(--surface);
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  text-align: center;
+  font-weight: 600;
+  color: var(--primary);
+  margin-top: 8px;
+}
+
 /* Add Entry Form */
 .add-form {
   margin-top: 16px;
@@ -352,6 +370,19 @@ html, body {
   gap: 12px;
   padding: 10px 0 4px;
 }
+
+.btn-sort-report {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 2px 8px;
+  touch-action: manipulation;
+  line-height: 1;
+}
+
+.btn-sort-report:active { opacity: 0.6; }
 
 .btn-page-nav {
   background: var(--surface2);
