@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.1] - 2026-06-02
+
+### Added
+- **Overlap highlighting in Day View:** Entries with overlapping time ranges are highlighted in red in both the TUI and web UI to prevent accidental double-booking.
+- **Web UI start time:** The "Start Timer" dialog now has an optional start time field for retroactive tracking.
+
+### Fixed
+- **TUI past start time:** Timer now starts from the entered time when specifying an earlier start time (e.g., "09:00" at 15:00).
+
+### Changed
+- **Touch-friendly inputs:** All text inputs on the web UI now have 48px minimum height, larger padding, and bigger font for easier mobile use.
+
 ## [1.2.0] - 2026-05-30
 
 ### Added

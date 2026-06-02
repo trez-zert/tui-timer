@@ -71,6 +71,7 @@ document.getElementById('btn-stop').addEventListener('click', stopTimer);
 document.getElementById('btn-task').addEventListener('click', showTaskSelector);
 document.getElementById('btn-task-confirm').addEventListener('click', confirmTaskSwitch);
 document.getElementById('btn-task-cancel').addEventListener('click', hideTaskSelector);
+document.getElementById('start-time-input').addEventListener('input', autoFormatTime);
 
 function showStartCommentSelector() {
   document.getElementById('timer-controls-start').classList.add('hidden');
@@ -78,6 +79,7 @@ function showStartCommentSelector() {
   const input = document.getElementById('start-comment-input');
   input.value = '';
   input.focus();
+  document.getElementById('start-time-input').value = '';
   refreshSuggestions(input, document.getElementById('start-comment-suggestions'), chipValue => {
     input.value = chipValue;
   });
@@ -91,8 +93,11 @@ function hideStartCommentSelector() {
 async function confirmStartTimer() {
   const input = document.getElementById('start-comment-input');
   const comment = input.value || '';
+  const startTime = normalizeTime(document.getElementById('start-time-input').value);
   try {
-    const res = await api.post('/api/timer/start', { comment });
+    const body = { comment };
+    if (startTime) body.start_time = startTime;
+    const res = await api.post('/api/timer/start', body);
     state.timerRunning = true;
     state.timerPaused = false;
     timerComment.textContent = res.comment || 'work';
@@ -367,10 +372,22 @@ function renderDayEntries(entries, dateStr) {
 
   container.innerHTML = '';
   let totalSec = 0;
+
+  const overlap = {};
+  for (let i = 0; i < entries.length; i++) {
+    const stA = parseTime(entries[i].start);
+    const etA = parseTime(entries[i].end);
+    for (let j = i + 1; j < entries.length; j++) {
+      const stB = parseTime(entries[j].start);
+      const etB = parseTime(entries[j].end);
+      if (stA < etB && stB < etA) { overlap[i] = true; overlap[j] = true; }
+    }
+  }
+
   entries.forEach((entry, idx) => {
     totalSec += parseDuration(entry.duration);
     const row = document.createElement('div');
-    row.className = 'entry-row';
+    row.className = 'entry-row' + (overlap[idx] ? ' overlap' : '');
 
     const time = document.createElement('span');
     time.className = 'entry-time';
@@ -747,6 +764,12 @@ function parseDuration(d) {
   if (!d) return 0;
   const h = d.match(/(\d+)h/), m = d.match(/(\d+)m/), s = d.match(/(\d+)s/);
   return (h ? +h[1] * 3600 : 0) + (m ? +m[1] * 60 : 0) + (s ? +s[1] : 0);
+}
+
+function parseTime(t) {
+  if (!t) return 0;
+  const p = t.split(':');
+  return (+p[0] || 0) * 60 + (+p[1] || 0);
 }
 
 // --- Init ---

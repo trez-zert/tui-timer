@@ -146,15 +146,46 @@ html, body {
   border-radius: var(--radius);
 }
 
-#task-input {
+.comment-selector input,
+.task-selector input,
+.add-form input,
+.modal input {
   width: 100%;
-  padding: 12px 16px;
+  padding: 14px 16px;
   border: 2px solid var(--surface2);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--bg);
   color: var(--text);
-  font-size: 1rem;
+  font-size: 1.05rem;
   outline: none;
+  min-height: 48px;
+  margin-bottom: 12px;
+}
+
+.comment-selector input:focus,
+.task-selector input:focus,
+.add-form input:focus,
+.modal input:focus {
+  border-color: var(--primary);
+}
+
+.comment-selector input:last-child,
+.task-selector input:last-child,
+.add-form input:last-child,
+.modal input:last-child {
+  margin-bottom: 0;
+}
+
+#task-input {
+  width: 100%;
+  padding: 14px 16px;
+  border: 2px solid var(--surface2);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 1.05rem;
+  outline: none;
+  min-height: 48px;
 }
 
 #task-input:focus { border-color: var(--primary); }
@@ -168,9 +199,9 @@ html, body {
 
 .suggestions .chip {
   background: var(--surface2);
-  padding: 6px 14px;
+  padding: 8px 16px;
   border-radius: 20px;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -203,6 +234,11 @@ html, body {
   border-radius: var(--radius);
   gap: 8px;
   touch-action: manipulation;
+}
+
+.entry-row.overlap {
+  background: #5c1a1a;
+  border: 1px solid var(--red);
 }
 
 .entry-time {
@@ -273,19 +309,6 @@ html, body {
   flex-direction: column;
   gap: 10px;
 }
-
-.add-form input {
-  width: 100%;
-  padding: 12px 16px;
-  border: 2px solid var(--surface2);
-  border-radius: 8px;
-  background: var(--bg);
-  color: var(--text);
-  font-size: 1rem;
-  outline: none;
-}
-
-.add-form input:focus { border-color: var(--primary); }
 
 .add-actions {
   display: flex;
@@ -542,20 +565,6 @@ html, body {
   margin-bottom: 16px;
   font-size: 1.1rem;
 }
-
-.modal input {
-  width: 100%;
-  padding: 12px 16px;
-  border: 2px solid var(--surface2);
-  border-radius: 8px;
-  background: var(--bg);
-  color: var(--text);
-  font-size: 1rem;
-  outline: none;
-  margin-bottom: 16px;
-}
-
-.modal input:focus { border-color: var(--primary); }
 
 .modal-actions {
   display: flex;

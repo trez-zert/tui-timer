@@ -499,7 +499,11 @@ func (m model) updateSetup(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if comment == "" {
 					comment = "work"
 				}
-				m.sharedTimer.Start(comment)
+				if valStart == "" || m.startTime.After(time.Now()) {
+					m.sharedTimer.Start(comment)
+				} else {
+					m.sharedTimer.StartAt(m.startTime, comment)
+				}
 				m.updateRecentComments(comment)
 				m.commentInput.SetValue(comment)
 			}
@@ -1168,7 +1172,7 @@ func (m model) viewOnboarding() string {
 func (m model) viewSetup() string {
 	var s strings.Builder
 	titleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Bold(true)
-	s.WriteString(titleStyle.Render("tuitime") + " " + lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render("v1.2.0") + "\n\n")
+	s.WriteString(titleStyle.Render("tuitime") + " " + lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render("v1.2.1") + "\n\n")
 
 	// Menu
 	for i, item := range menuItems {
@@ -1523,8 +1527,21 @@ func (m model) viewDay() string {
 	if len(m.dayEntries) == 0 {
 		s.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render("No entries for this day.") + "\n")
 	} else {
+		overlap := make(map[int]bool)
+		for i := range m.dayEntries {
+			for j := i + 1; j < len(m.dayEntries); j++ {
+				a, b := m.dayEntries[i], m.dayEntries[j]
+				if a.Start.Before(b.End) && b.Start.Before(a.End) {
+					overlap[i] = true
+					overlap[j] = true
+				}
+			}
+		}
 		for i, e := range m.dayEntries {
 			style := lipgloss.NewStyle()
+			if overlap[i] {
+				style = style.Foreground(lipgloss.Color("11")).Background(lipgloss.Color("52"))
+			}
 			if i == m.dayCursor {
 				style = style.Background(lipgloss.Color("235"))
 			}

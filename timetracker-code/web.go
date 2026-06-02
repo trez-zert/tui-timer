@@ -60,6 +60,17 @@ func (st *SharedTimer) Start(comment string) {
 	st.pauseStart = time.Time{}
 }
 
+func (st *SharedTimer) StartAt(startTime time.Time, comment string) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	st.running = true
+	st.startTime = startTime
+	st.comment = comment
+	st.paused = false
+	st.pausedDuration = 0
+	st.pauseStart = time.Time{}
+}
+
 func (st *SharedTimer) TogglePause() {
 	st.mu.Lock()
 	defer st.mu.Unlock()
@@ -307,11 +318,20 @@ func handleTimerStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Comment string `json:"comment"`
+		Comment   string `json:"comment"`
+		StartTime string `json:"start_time"`
 	}
 	json.NewDecoder(r.Body).Decode(&body)
 
-	sharedTimer.Start(body.Comment)
+	if body.StartTime != "" {
+		if t, err := timedata.ParseTime(body.StartTime); err == nil {
+			sharedTimer.StartAt(t, body.Comment)
+		} else {
+			sharedTimer.Start(body.Comment)
+		}
+	} else {
+		sharedTimer.Start(body.Comment)
+	}
 
 	jsonResponse(w, map[string]interface{}{
 		"status":  "started",
